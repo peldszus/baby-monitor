@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { mdiBabyCarriage, mdiVideoOffOutline } from '@mdi/js'
+import { useRouter } from 'vue-router'
+import { mdiBabyCarriage, mdiCameraOutline, mdiCellphone } from '@mdi/js'
+
+const router = useRouter()
+
+function choose(path: string): void {
+  void router.push(path)
+}
 </script>
 
 <template>
@@ -14,15 +21,42 @@ import { mdiBabyCarriage, mdiVideoOffOutline } from '@mdi/js'
       </p>
     </section>
 
-    <v-card variant="flat" color="surface-container" class="empty-state">
-      <v-card-item>
-        <template #prepend>
-          <v-icon :icon="mdiVideoOffOutline" color="on-surface-variant" />
-        </template>
-        <v-card-title class="text-subtitle-1">No monitor paired</v-card-title>
-        <v-card-subtitle>Camera and audio monitoring will appear here.</v-card-subtitle>
-      </v-card-item>
-    </v-card>
+    <div class="roles">
+      <v-card variant="flat" color="surface-container" class="role-card">
+        <v-card-item>
+          <template #prepend>
+            <v-icon :icon="mdiCameraOutline" color="primary" />
+          </template>
+          <v-card-title class="text-subtitle-1">Child device</v-card-title>
+          <v-card-subtitle>Sends video and audio. Leave it with your little one.</v-card-subtitle>
+        </v-card-item>
+        <v-card-actions>
+          <v-btn block color="primary" data-testid="role-child" @click="choose('/child')">
+            Use as child device
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+
+      <v-card variant="flat" color="surface-container" class="role-card">
+        <v-card-item>
+          <template #prepend>
+            <v-icon :icon="mdiCellphone" color="primary" />
+          </template>
+          <v-card-title class="text-subtitle-1">Parent device</v-card-title>
+          <v-card-subtitle>Receives video and audio. Keep it with you.</v-card-subtitle>
+        </v-card-item>
+        <v-card-actions>
+          <v-btn block variant="tonal" data-testid="role-parent" @click="choose('/parent')">
+            Use as parent device
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </div>
+
+    <p class="disclaimer">
+      Pairing uses a direct, encrypted WebRTC connection on your local network. No account, no cloud
+      and no analytics. This app is not a medical device and does not replace supervision.
+    </p>
   </div>
 </template>
 
@@ -56,5 +90,32 @@ import { mdiBabyCarriage, mdiVideoOffOutline } from '@mdi/js'
 
 .hero p {
   max-width: 36ch;
+}
+
+.roles {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 560px) {
+  .roles {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.role-card :deep(.v-card-actions) {
+  margin-top: auto;
+}
+
+.disclaimer {
+  margin: 0;
+  font-size: 0.75rem;
+  text-align: center;
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 </style>
