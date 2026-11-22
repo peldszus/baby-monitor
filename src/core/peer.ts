@@ -87,6 +87,7 @@ export class PeerSession {
     for (const track of stream.getTracks()) {
       this.connection.addTrack(track, stream)
     }
+    this.limitCodecs()
     this.bindChannel(this.connection.createDataChannel('control', { ordered: true }))
 
     const offer = await this.connection.createOffer()
@@ -127,5 +128,23 @@ export class PeerSession {
   private bindChannel(channel: RTCDataChannel): void {
     this.channel = channel
     this.callbacks.onChannel?.(channel)
+  }
+
+  /**
+   * Offer every codec Chrome knows by default and the SDP grows past three QR
+   * codes. Opus and VP8 are enough for a monitor and keep the offer to two.
+   */
+  private limitCodecs(): void {
+    if (typeof RTCRtpSender.getCapabilities !== 'function') return
+
+    for (const transceiver of this.connection.getTransceivers()) {
+      const kind = transceiver.receiver.track.kind
+      if (kind !== 'audio' && kind !== 'video') continue
+      const capabilities = RTCRtpSender.getCapabilities(kind)
+      if (!capabilities) continue
+      const allowed = kind === 'audio' ? ['audio/opus'] : ['video/VP8', 'video/rtx']
+      const codecs = capabilities.codecs.filter((codec) => allowed.includes(codec.mimeType))
+      if (codecs.length > 0) transceiver.setCodecPreferences(codecs)
+    }
   }
 }

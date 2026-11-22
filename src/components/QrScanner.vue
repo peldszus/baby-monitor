@@ -15,16 +15,30 @@ const emit = defineEmits<{
 
 const video = ref<HTMLVideoElement | null>(null)
 const error = ref<string | null>(null)
+const scanning = ref(false)
+const captured = ref(false)
 const scanner = createQrScanner()
 let starting = false
+let capturedTimer: ReturnType<typeof setTimeout> | undefined
+
+function onDecoded(text: string): void {
+  captured.value = true
+  clearTimeout(capturedTimer)
+  capturedTimer = setTimeout(() => {
+    captured.value = false
+  }, 1500)
+  emit('decoded', text)
+}
 
 async function start(): Promise<void> {
   const element = video.value
   if (!element || starting) return
   starting = true
   error.value = null
+  captured.value = false
   try {
-    await scanner.start(element, (text) => emit('decoded', text), props.stream)
+    await scanner.start(element, onDecoded, props.stream)
+    scanning.value = true
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not start the camera.'
   } finally {
@@ -33,6 +47,9 @@ async function start(): Promise<void> {
 }
 
 function stop(): void {
+  scanning.value = false
+  captured.value = false
+  clearTimeout(capturedTimer)
   scanner.stop()
 }
 
@@ -67,7 +84,19 @@ onBeforeUnmount(stop)
       <v-card-text class="scanner-body">
         <v-alert v-if="error" type="error" variant="tonal">{{ error }}</v-alert>
         <video ref="video" class="scanner-video" muted playsinline />
-        <p class="scanner-hint">Point the camera at the QR code on the other device.</p>
+        <v-progress-linear v-if="!error" indeterminate color="primary" rounded />
+        <p class="scanner-hint" data-testid="scanner-status">
+          {{
+            error
+              ? 'Camera unavailable.'
+              : captured
+                ? 'Code captured. Scan the next code if prompted.'
+                : scanning
+                  ? 'Scanning for a QR code…'
+                  : 'Starting the camera…'
+          }}
+        </p>
+        <p class="scanner-hint">Scanning is automatic. There is no shutter button.</p>
       </v-card-text>
       <v-card-actions>
         <v-spacer />

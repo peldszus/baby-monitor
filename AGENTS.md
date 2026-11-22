@@ -87,6 +87,8 @@ that directory.
   messages and out-of-range values. Only `hello`, `ping` and `pong` exist in M0/M1.
 - `PeerSession` always uses `iceServers: []`, waits for complete ICE gathering before returning an
   SDP, and keeps media and control on the same encrypted peer connection.
+- The child offer is limited to Opus and VP8. Chrome's full codec list triples the offer SDP and
+  forces a third, denser QR code.
 - The short code is the first four bytes of SHA-256 over the sorted, deduplicated DTLS fingerprints
   from both SDPs, reduced to six digits. It is computed locally on both devices.
 - No SDP or pairing secret is logged or persisted. There is no analytics and no runtime CDN.
@@ -104,7 +106,9 @@ Current milestone status:
 launch flags supply fake camera/microphone input and disable mDNS host-candidate hiding, so the two
 contexts build a real WebRTC connection. The test drives the full offer/answer flow through the text
 fallback, then asserts the parent receives video, both short codes match, and a ping produces an RTT.
-Install the browser once with `npx playwright install chromium`.
+`e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
+scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
+`npx playwright install chromium`.
 
 ## Design System
 

@@ -17,8 +17,9 @@ alarms and presentation features are still to come.
 3. Scan or paste the answer on the child device. Both sides connect and show the live stream.
 
 Pairing codes are compressed and expire after two minutes. Large SDPs are split across several QR
-codes. Both devices derive the same six-digit short code from the DTLS fingerprints so you can
-compare them out of band.
+codes. The scanner reads continuously while the dialog is open; there is no shutter button. The
+offer is limited to Opus and VP8 so the code stays small. Both devices derive the same six-digit
+short code from the DTLS fingerprints so you can compare them out of band.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation. There is no reconnection after a network change yet; pair again if the connection is

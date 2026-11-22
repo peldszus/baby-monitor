@@ -8,7 +8,10 @@ interface BarcodeDetectorLike {
   detect(source: HTMLVideoElement): Promise<BarcodeDetectorResult[]>
 }
 
-type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike
+type BarcodeDetectorConstructor = {
+  new (options: { formats: string[] }): BarcodeDetectorLike
+  getSupportedFormats?: () => Promise<string[]>
+}
 
 export interface QrScanner {
   start(
@@ -19,14 +22,21 @@ export interface QrScanner {
   stop(): void
 }
 
-const DETECT_INTERVAL_MS = 250
+const BARCODE_INTERVAL_MS = 200
+const JSQR_INTERVAL_MS = 120
+const JSQR_MAX_WIDTH = 960
+const BARCODE_EMPTY_LIMIT = 15
 const DUPLICATE_WINDOW_MS = 2000
 
-function createBarcodeDetector(): BarcodeDetectorLike | null {
+async function createBarcodeDetector(): Promise<BarcodeDetectorLike | null> {
   const Detector = (globalThis as unknown as { BarcodeDetector?: BarcodeDetectorConstructor })
     .BarcodeDetector
   if (!Detector) return null
   try {
+    if (typeof Detector.getSupportedFormats === 'function') {
+      const formats = await Detector.getSupportedFormats()
+      if (!formats.includes('qr_code')) return null
+    }
     return new Detector({ formats: ['qr_code'] })
   } catch {
     return null
@@ -41,7 +51,7 @@ export function createQrScanner(): QrScanner {
   let stream: MediaStream | null = null
   let ownsStream = false
   let running = false
-  let frame = 0
+  let generation = 0
   let lastText = ''
   let lastAt = 0
 
@@ -53,43 +63,48 @@ export function createQrScanner(): QrScanner {
     onResult(text)
   }
 
-  async function detectWithBarcodeDetector(
-    detector: BarcodeDetectorLike,
+  async function detectLoop(
     video: HTMLVideoElement,
-    onResult: (text: string) => void
+    onResult: (text: string) => void,
+    detector: BarcodeDetectorLike | null,
+    token: number
   ): Promise<void> {
-    while (running) {
-      if (video.readyState >= 2) {
-        try {
-          const results = await detector.detect(video)
-          const value = results[0]?.rawValue
-          if (value) emit(value, onResult)
-        } catch {
-          // A transient detection failure should not stop the camera.
-        }
-      }
-      await delay(DETECT_INTERVAL_MS)
-    }
-  }
-
-  function detectWithJsQr(video: HTMLVideoElement, onResult: (text: string) => void): void {
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d', { willReadFrequently: true })
-    if (!context) return
+    let useJsQr = !detector || !context
+    let emptyRuns = 0
 
-    const tick = () => {
-      if (!running) return
+    while (running && token === generation) {
       if (video.readyState >= 2 && video.videoWidth > 0) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        context.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const image = context.getImageData(0, 0, canvas.width, canvas.height)
-        const result = jsQR(image.data, image.width, image.height)
-        if (result?.data) emit(result.data, onResult)
+        let value: string | undefined
+
+        if (!useJsQr && detector) {
+          try {
+            const results = await detector.detect(video)
+            value = results[0]?.rawValue
+            if (value) emptyRuns = 0
+            else if (++emptyRuns >= BARCODE_EMPTY_LIMIT) useJsQr = true
+          } catch {
+            // Some implementations expose BarcodeDetector but fail on camera
+            // frames. Fall back to the JavaScript decoder instead of idling.
+            useJsQr = true
+          }
+        }
+
+        if (useJsQr && context) {
+          const scale = Math.min(1, JSQR_MAX_WIDTH / video.videoWidth)
+          canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
+          canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
+          context.drawImage(video, 0, 0, canvas.width, canvas.height)
+          const image = context.getImageData(0, 0, canvas.width, canvas.height)
+          value = jsQR(image.data, image.width, image.height)?.data
+        }
+
+        if (value) emit(value, onResult)
       }
-      frame = requestAnimationFrame(tick)
+
+      await delay(useJsQr ? JSQR_INTERVAL_MS : BARCODE_INTERVAL_MS)
     }
-    frame = requestAnimationFrame(tick)
   }
 
   return {
@@ -104,7 +119,11 @@ export function createQrScanner(): QrScanner {
           throw new Error('Camera access is not available in this browser.')
         }
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         })
         ownsStream = true
@@ -115,18 +134,15 @@ export function createQrScanner(): QrScanner {
       video.playsInline = true
       await video.play()
       running = true
+      const token = ++generation
 
-      const detector = createBarcodeDetector()
-      if (detector) {
-        void detectWithBarcodeDetector(detector, video, onResult)
-      } else {
-        detectWithJsQr(video, onResult)
-      }
+      const detector = await createBarcodeDetector()
+      void detectLoop(video, onResult, detector, token)
     },
 
     stop() {
       running = false
-      cancelAnimationFrame(frame)
+      generation += 1
       if (stream && ownsStream) {
         for (const track of stream.getTracks()) track.stop()
       }
