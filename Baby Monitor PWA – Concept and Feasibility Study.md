@@ -122,15 +122,15 @@ Short interruptions often heal on their own in WebRTC (`disconnected` goes back 
 
 One `RTCDataChannel` (`ordered: true`, label `control`), encrypted like the media. Versioned JSON messages with a `type`:
 
-| Direction | Type | Content |
-| --- | --- | --- |
-| both | `hello` | `{v:1, role, caps}` with capabilities (for example supported constraints) |
-| both | `ping` / `pong` | `{t}` heartbeat, every 2 s |
-| parent → child | `set-video` | `{enabled, fps, scaleDownBy, maxBitrate}` |
-| parent → child | `set-audio` | `{enabled, gain, noiseSuppression, autoGainControl}` |
-| parent → child | `set-screen` | `{dark}` |
-| child → parent | `status` | `{battery, charging, fps, width, height, bitrate, audioLevel, screenDark, zoomCaps}` |
-| child → parent | `ack` / `error` | acknowledgement or error for a command (`id`) |
+| Direction      | Type            | Content                                                                              |
+| -------------- | --------------- | ------------------------------------------------------------------------------------ |
+| both           | `hello`         | `{v:1, role, caps}` with capabilities (for example supported constraints)            |
+| both           | `ping` / `pong` | `{t}` heartbeat, every 2 s                                                           |
+| parent → child | `set-video`     | `{enabled, fps, scaleDownBy, maxBitrate}`                                            |
+| parent → child | `set-audio`     | `{enabled, gain, noiseSuppression, autoGainControl}`                                 |
+| parent → child | `set-screen`    | `{dark}`                                                                             |
+| child → parent | `status`        | `{battery, charging, fps, width, height, bitrate, audioLevel, screenDark, zoomCaps}` |
+| child → parent | `ack` / `error` | acknowledgement or error for a command (`id`)                                        |
 
 Rules:
 
@@ -238,17 +238,17 @@ Start in M0/M1 with Vitest (protocol, QR) plus one Playwright two-context test f
 
 ## 12. Risks and Countermeasures
 
-| Risk | Impact | Countermeasure |
-| --- | --- | --- |
-| Client isolation / mDNS blocked on Wi-Fi | no connection | hotspot as workaround, clear error message, test on hotel Wi-Fi |
-| iOS stops camera/audio in the background | failure during operation | Wake Lock, dark fullscreen mode, night test, clear usage notes |
-| QR code too large | pairing fails | compression, lean SDP, chunking |
-| Differences in `setParameters` | slider has no effect | measure via `getStats()`, fallbacks, show the actual value |
-| Silent failure | danger during operation | heartbeat, loud alarm, status display |
-| Overheating/battery on the child device | abort | charger, low load, audio-only mode |
-| New pairing after a longer outage | loss of convenience | explain in the UI, make pairing as fast as possible |
-| Dependencies (QR library) | security vulnerabilities | few, pinned, reviewed packages |
-| Automation misses device-specific behavior | regressions unnoticed | manual device matrix and night test as release gate |
+| Risk                                       | Impact                   | Countermeasure                                                  |
+| ------------------------------------------ | ------------------------ | --------------------------------------------------------------- |
+| Client isolation / mDNS blocked on Wi-Fi   | no connection            | hotspot as workaround, clear error message, test on hotel Wi-Fi |
+| iOS stops camera/audio in the background   | failure during operation | Wake Lock, dark fullscreen mode, night test, clear usage notes  |
+| QR code too large                          | pairing fails            | compression, lean SDP, chunking                                 |
+| Differences in `setParameters`             | slider has no effect     | measure via `getStats()`, fallbacks, show the actual value      |
+| Silent failure                             | danger during operation  | heartbeat, loud alarm, status display                           |
+| Overheating/battery on the child device    | abort                    | charger, low load, audio-only mode                              |
+| New pairing after a longer outage          | loss of convenience      | explain in the UI, make pairing as fast as possible             |
+| Dependencies (QR library)                  | security vulnerabilities | few, pinned, reviewed packages                                  |
+| Automation misses device-specific behavior | regressions unnoticed    | manual device matrix and night test as release gate             |
 
 ## 13. Milestones
 

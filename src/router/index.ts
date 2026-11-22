@@ -5,6 +5,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Screen title, shown in the top app bar. */
     title?: string
+    /** Shows a back button in the app bar. */
+    showBackButton?: boolean
   }
 }
 
@@ -17,6 +19,18 @@ const router = createRouter({
       name: 'home',
       component: HomeView,
       meta: { title: 'Baby Monitor' },
+    },
+    {
+      path: '/child',
+      name: 'child',
+      component: () => import('@/views/ChildView.vue'),
+      meta: { title: 'Child device', showBackButton: true },
+    },
+    {
+      path: '/parent',
+      name: 'parent',
+      component: () => import('@/views/ParentView.vue'),
+      meta: { title: 'Parent device', showBackButton: true },
     },
   ],
 })
