@@ -1,0 +1,6 @@
+/* Self-hosted so the PWA renders correctly offline. */
+@import '@fontsource-variable/roboto/index.css';
+
+body {
+  font-family: 'Roboto Variable', system-ui, sans-serif;
+}
