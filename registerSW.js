@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/baby-monitor/sw.js', { scope: '/baby-monitor/' })})}

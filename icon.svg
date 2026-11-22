@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Baby monitor">
+  <rect width="512" height="512" fill="#B3EBFB" />
+  <rect x="96" y="112" width="320" height="256" rx="48" fill="#2E6171" />
+  <rect x="128" y="144" width="256" height="160" rx="24" fill="#F7FAFB" />
+  <circle cx="256" cy="224" r="48" fill="#2E6171" />
+  <circle cx="256" cy="224" r="24" fill="#97CFE1" />
+  <circle cx="241" cy="209" r="8" fill="#F7FAFB" />
+  <rect x="232" y="368" width="48" height="32" fill="#2E6171" />
+  <rect x="160" y="400" width="192" height="32" rx="16" fill="#2E6171" />
+</svg>
