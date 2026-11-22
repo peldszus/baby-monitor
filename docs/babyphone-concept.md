@@ -62,8 +62,8 @@ Pairing: QR code (offer) -> QR code (answer), no server
 Building blocks:
 
 1. **Transport:** a single `RTCPeerConnection` with an audio track, a video track and one data channel.
-2. **Signaling:** QR-based, serverless (section 4).
-3. **Control channel:** JSON messages over the data channel (section 6).
+2. **Signaling:** QR-based, serverless; the QR codes carry only a compact data-channel handshake (section 4).
+3. **Control channel and media negotiation:** JSON messages over the data channel (section 6); audio and video are negotiated over it after connecting (section 4.6).
 4. **UI/logic:** Vue 3, role mode per device, state machine for connection and operation.
 5. **PWA shell:** manifest, service worker (offline app shell), installability.
 
@@ -71,25 +71,33 @@ Building blocks:
 
 ### 4.1 Flow
 
-1. Child device: choose the “child” role, grant camera/microphone access, create the `RTCPeerConnection`, create the data channel, create the **offer** and wait until ICE gathering is complete (`iceGatheringState === 'complete'`, no trickle ICE). Show the full `localDescription` as a QR code.
-2. Parent device: choose the “parent” role, scan the QR code, set the offer, create the **answer**, again wait for complete ICE gathering and show the answer as a QR code.
-3. Child device: scan the answer and set it. The connection is up and both sides show the status.
+1. Child device: choose the “child” role, create the `RTCPeerConnection` and a data channel (**no audio/video tracks yet**), create the **offer** and wait until ICE gathering is complete (`iceGatheringState === 'complete'`, no trickle ICE). Extract the essentials (see 4.3) and show them as a small QR code.
+2. Parent device: choose the “parent” role, scan the QR code, rebuild the data-channel-only offer from the template and set it, create the **answer**, wait for complete ICE gathering, extract the essentials and show them as a QR code.
+3. Child device: scan the answer, rebuild it from the template and set it. The data channel opens; it is already encrypted and authenticated.
+4. Over the data channel the devices negotiate audio and video (4.6). Only then are camera and microphone started on the child device.
 
-That is two scans but no infrastructure. A relay server would need only one scan but contradicts the serverless goal.
+That is still two scans, because a browser cannot listen on a port or accept incoming connections: the QR codes must carry the handshake data in both directions. They are small, so the app should switch to scan mode automatically after the first scan. A relay server would need only one scan but contradicts the serverless goal.
 
 ### 4.2 Why this is secure
 
-- The SDP contains the **DTLS certificate fingerprint** and the ICE credentials (`ice-ufrag`, `ice-pwd`). Because both travel by line of sight through the QR code, an attacker on the Wi-Fi can neither swap the fingerprint nor take over the connection.
+- The QR payload contains the **DTLS certificate fingerprint** and the ICE credentials (`ice-ufrag`, `ice-pwd`). Because both travel by line of sight through the QR code, an attacker on the Wi-Fi can neither swap the fingerprint nor take over the connection.
 - Only these two instances can connect. The QR codes are **one-time secrets**: short validity (for example two minutes), then discard; never store or log them.
 - Optional: a **short code to compare** (short authentication string) derived from both fingerprints (for example SHA-256 over the sorted concatenation, shown as 4 words or 6 digits) on both devices. This adds protection if a QR code was photographed.
 
-### 4.3 QR Size
+### 4.3 Compact QR Payload
 
-A full SDP with ICE candidates is several KB depending on the browser. Recommendation, try in this order:
+Each QR code carries only what the other side cannot know. Everything else (media lines, attributes, SCTP settings) comes from a fixed SDP template that both sides share, because both run the same app. A data-channel-only SDP is small and stable across Chrome and Safari. Codecs are negotiated later over the data channel (4.6), so no codec details ever enter a QR code.
 
-1. Compress the SDP with `CompressionStream('deflate-raw')` and encode as Base64url.
-2. Allow only the audio/video codecs and extensions that are really needed (`setCodecPreferences`) to shrink the SDP. No risky manual SDP rewriting without tests.
-3. If one QR code is still too large: split into a short sequence of QR codes (chunks with index/total and checksum) that the scanner captures one after the other.
+Payload per direction (roughly 100–150 bytes):
+
+1. Format version (1 byte), so the fallback format below can be told apart.
+2. `ice-ufrag` and `ice-pwd`.
+3. DTLS fingerprint (32 bytes, SHA-256) and the `setup` role.
+4. One or two host candidates (IP and port, or the mDNS host name). Leave out TCP, relay and srflx candidates.
+
+Encode as a fixed-layout binary record, then Base64url. Rebuild the SDP by filling the template and call `setRemoteDescription`. Validate every field (length, charset) before it enters the SDP, and never copy unknown fields into it.
+
+Fallback format (version 2): the full SDP compressed with `CompressionStream('deflate-raw')` and Base64url, used if the template path fails on some browser combination. If one code is still too large, split it into a short sequence of QR codes (chunks with index/total and checksum).
 
 The QR code itself needs a small library (there is no browser API for generating it). Use a small, dependency-free, pinned library. For scanning, prefer `BarcodeDetector` (Chrome/Android) and use a small scanner library as a fallback for Safari. Alternative: scan with the system camera and open a link that carries the code in the fragment (`#…`, which is not sent to the server).
 
@@ -103,9 +111,18 @@ The QR code itself needs a small library (there is no browser API for generating
 
 Short interruptions often heal on their own in WebRTC (`disconnected` goes back to `connected`). An **ICE restart**, however, needs a signaling path: over the data channel it works only while the channel still works. After a longer outage or a new network address a **new pairing via QR** is required. The UI must communicate this clearly, and the parent device must raise the failure loudly (see 7.1).
 
+### 4.6 Media Negotiation over the Data Channel
+
+Once the data channel is open, the child device adds its audio and video tracks (creating the transceivers) and sends an offer as a `negotiate` message; the parent device answers over the same channel. Each browser generates its own media SDP, so no SDP is edited by hand and Chrome/Safari differences stay inside the browser.
+
+- Use the “perfect negotiation” pattern (polite/impolite peer) to avoid offer collisions; the parent device is the polite peer.
+- Keep the transceivers for the lifetime of the connection. Switching video or audio on and off later uses `replaceTrack` (section 5) and needs no renegotiation; adding a track or changing codec preferences does.
+- Start camera and microphone only after the negotiation has succeeded, and show “connecting media” in the UI during the short delay (typically a few hundred milliseconds).
+- Validate negotiation messages like every other control message (section 6).
+
 ## 5. Media
 
-- **Capture:** `getUserMedia({audio, video})` on the child device. Rear or front camera selectable. Default: 640×480, low frame rate (for example 10 fps).
+- **Capture:** `getUserMedia({audio, video})` on the child device. Rear or front camera selectable. Default: rear/main camera at 1280×720 and 15 fps; lower values remain available for bandwidth and power control.
 - **Codecs:** browser defaults (VP8/H.264, Opus). Intervene with `RTCRtpTransceiver.setCodecPreferences` only where needed (for example test H.264 for hardware encoding on some devices).
 - **Video hint:** set `videoTrack.contentHint = 'motion'` or `'detail'` and test.
 - **Audio processing:** `echoCancellation: false` (no echo scenario); `noiseSuppression` and `autoGainControl` adjustable, default rather **off**, because they can suppress quiet sounds.
@@ -126,6 +143,7 @@ One `RTCDataChannel` (`ordered: true`, label `control`), encrypted like the medi
 | -------------- | --------------- | ------------------------------------------------------------------------------------ |
 | both           | `hello`         | `{v:1, role, caps}` with capabilities (for example supported constraints)            |
 | both           | `ping` / `pong` | `{t}` heartbeat, every 2 s                                                           |
+| both           | `negotiate`     | `{description: {type, sdp}}` media offer/answer over the data channel (4.6)          |
 | parent → child | `set-video`     | `{enabled, fps, scaleDownBy, maxBitrate}`                                            |
 | parent → child | `set-audio`     | `{enabled, gain, noiseSuppression, autoGainControl}`                                 |
 | parent → child | `set-screen`    | `{dark}`                                                                             |
@@ -185,8 +203,9 @@ A **night test** (6–8 hours, both devices, default settings, real Wi-Fi) on al
 - **Stack:** Vue 3 (Composition API), TypeScript, Vite, `vite-plugin-pwa` (service worker, manifest). Pinia only if needed.
 - **Module structure:**
   - `core/peer.ts`: wraps `RTCPeerConnection`, offer/answer, ICE gathering, state reporting.
-  - `core/signaling-qr.ts`: compress/encode SDP, chunking, validity period, decoder.
+  - `core/signaling-qr.ts`: compact payload codec (SDP template, binary encode/decode), full-SDP fallback, chunking, validity period.
   - `core/control.ts`: data channel protocol (types, validation, heartbeat).
+  - `core/negotiation.ts`: media offer/answer over the data channel (perfect negotiation, parent is the polite peer).
   - `core/media-child.ts`: `getUserMedia`, gain graph, constraints, `replaceTrack`.
   - `core/media-parent.ts`: playback, gain, level measurement, canvas pipeline for PiP.
   - `core/power.ts`: Wake Lock, battery, visibility, black fullscreen surface.
@@ -205,10 +224,10 @@ The two-device setup is testable: Playwright can start two isolated browser cont
 
 1. **Unit tests (Vitest):** everything without browser APIs.
    - Control protocol: validation, value ranges, unknown fields.
-   - QR encoding: SDP compress/decode round trip, chunking, checksum, expiry.
+   - QR payload: compact encode/decode round trip, SDP template rebuilt from real Chrome and Safari SDPs, full-SDP fallback, chunking, checksum, expiry.
    - State machine and heartbeat with fake timers (alarm after 6 s without pong).
    - Short code derived from fingerprints.
-2. **Integration tests:** two real `RTCPeerConnection`s in the same Chromium page (Vitest Browser Mode or Playwright). Cover offer/answer, data channel, commands and status messages, without UI.
+2. **Integration tests:** two real `RTCPeerConnection`s in the same Chromium page (Vitest Browser Mode or Playwright). Cover the compact handshake, data channel, media renegotiation over the data channel, commands and status messages, without UI.
 3. **End-to-end tests (Playwright):** two contexts, the real flow: role selection, pairing, video arrives, controls take effect, alarm on connection loss.
 4. **Manual device tests:** everything automation cannot cover (see 11.3).
 
@@ -238,23 +257,24 @@ Start in M0/M1 with Vitest (protocol, QR) plus one Playwright two-context test f
 
 ## 12. Risks and Countermeasures
 
-| Risk                                       | Impact                   | Countermeasure                                                  |
-| ------------------------------------------ | ------------------------ | --------------------------------------------------------------- |
-| Client isolation / mDNS blocked on Wi-Fi   | no connection            | hotspot as workaround, clear error message, test on hotel Wi-Fi |
-| iOS stops camera/audio in the background   | failure during operation | Wake Lock, dark fullscreen mode, night test, clear usage notes  |
-| QR code too large                          | pairing fails            | compression, lean SDP, chunking                                 |
-| Differences in `setParameters`             | slider has no effect     | measure via `getStats()`, fallbacks, show the actual value      |
-| Silent failure                             | danger during operation  | heartbeat, loud alarm, status display                           |
-| Overheating/battery on the child device    | abort                    | charger, low load, audio-only mode                              |
-| New pairing after a longer outage          | loss of convenience      | explain in the UI, make pairing as fast as possible             |
-| Dependencies (QR library)                  | security vulnerabilities | few, pinned, reviewed packages                                  |
-| Automation misses device-specific behavior | regressions unnoticed    | manual device matrix and night test as release gate             |
+| Risk                                              | Impact                       | Countermeasure                                                                                          |
+| ------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Client isolation / mDNS blocked on Wi-Fi          | no connection                | hotspot as workaround, clear error message, test on hotel Wi-Fi                                         |
+| iOS stops camera/audio in the background          | failure during operation     | Wake Lock, dark fullscreen mode, night test, clear usage notes                                          |
+| QR code too large                                 | pairing fails                | compact payload (4.3), chunking as fallback                                                             |
+| SDP template not accepted by some browser version | pairing fails on that device | data-channel-only template, round-trip tests with real Chrome and Safari SDPs, full-SDP fallback format |
+| Differences in `setParameters`                    | slider has no effect         | measure via `getStats()`, fallbacks, show the actual value                                              |
+| Silent failure                                    | danger during operation      | heartbeat, loud alarm, status display                                                                   |
+| Overheating/battery on the child device           | abort                        | charger, low load, audio-only mode                                                                      |
+| New pairing after a longer outage                 | loss of convenience          | explain in the UI, make pairing as fast as possible                                                     |
+| Dependencies (QR library)                         | security vulnerabilities     | few, pinned, reviewed packages                                                                          |
+| Automation misses device-specific behavior        | regressions unnoticed        | manual device matrix and night test as release gate                                                     |
 
 ## 13. Milestones
 
 1. **M0 Prototype:** two phones, SDP via copy-paste, video/audio on home Wi-Fi, data channel with ping. Vitest set up for protocol code.
-2. **M1 Pairing:** QR offer/answer with compression, scanner, validity period, optional short code. First Playwright two-context pairing test.
-3. **M2 Control:** audio/video on/off, frame rate, resolution, bitrate, mic gain, volume, status display. Integration tests for all commands.
+2. **M1 Pairing:** compact QR payload (data-channel-only SDP template) with full-SDP fallback, scanner, validity period, optional short code. First Playwright two-context pairing test.
+3. **M2 Control:** media negotiation over the data channel, audio/video on/off, frame rate, resolution, bitrate, mic gain, volume, status display. Integration tests for all commands and for renegotiation.
 4. **M3 Operation:** Wake Lock, black fullscreen surface, heartbeat and alarm, reconnection. E2E test for alarm on connection loss.
 5. **M4 Presentation:** rotation, pan/zoom, PiP (standard first, then the canvas variant).
 6. **M5 PWA/hardening:** installability, offline shell, CSP and headers, dependency audit. CI with unit, integration and E2E tests.
@@ -265,6 +285,7 @@ Start in M0/M1 with Vitest (protocol, QR) plus one Playwright two-context test f
 ## 14. Open Points and Decisions
 
 - Define target devices and browser versions (Android model, iOS version).
-- QR decision: one or two scans (two without a server). Later optionally a small relay as a convenience that does not weaken the security assumptions.
+- QR decision: two scans without a server (a browser cannot accept incoming connections), kept small by the compact payload. Later optionally a small relay as a convenience that does not weaken the security assumptions.
+- Freeze the compact payload layout (field order, lengths, version byte) after testing real Chrome and Safari SDPs.
 - Which additional features follow after the first version (noise alarm, night light, multiple parent devices)?
 - Hosting of the static PWA (HTTPS host, header configuration).

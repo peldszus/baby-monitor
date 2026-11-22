@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createHello,
+  createNegotiate,
   createPing,
   createPong,
   decodeControlMessage,
@@ -13,6 +14,10 @@ describe('control protocol', () => {
     const hello = createHello('child', ['wake-lock'])
     const ping = createPing(12.5)
     const pong = createPong(12.5)
+    const negotiate = createNegotiate({
+      type: 'offer',
+      sdp: 'v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+    })
 
     expect(decodeControlMessage(encodeControlMessage(hello))).toEqual({
       ok: true,
@@ -25,6 +30,10 @@ describe('control protocol', () => {
     expect(decodeControlMessage(encodeControlMessage(pong))).toEqual({
       ok: true,
       message: pong,
+    })
+    expect(decodeControlMessage(encodeControlMessage(negotiate))).toEqual({
+      ok: true,
+      message: negotiate,
     })
   })
 
@@ -49,6 +58,24 @@ describe('control protocol', () => {
       ok: false,
       reason: 'invalid-shape',
     })
+  })
+
+  it('validates negotiation descriptions', () => {
+    expect(
+      decodeControlMessage(
+        '{"v":1,"id":"x","type":"negotiate","description":{"type":"rollback","sdp":"v=0"}}'
+      )
+    ).toEqual({ ok: false, reason: 'invalid-shape' })
+    expect(
+      decodeControlMessage(
+        '{"v":1,"id":"x","type":"negotiate","description":{"type":"offer","sdp":""}}'
+      )
+    ).toEqual({ ok: false, reason: 'invalid-shape' })
+    expect(
+      decodeControlMessage(
+        `{"v":1,"id":"x","type":"negotiate","description":{"type":"offer","sdp":"${'x'.repeat(12_001)}"}}`
+      )
+    ).toEqual({ ok: false, reason: 'invalid-shape' })
   })
 
   it('validates hello roles and capabilities', () => {

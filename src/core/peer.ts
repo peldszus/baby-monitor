@@ -1,4 +1,7 @@
 import { encodeControlMessage, type ControlMessage } from './control'
+import { PerfectNegotiator, waitForIceGathering, type NegotiationDescription } from './negotiation'
+
+export { waitForIceGathering }
 
 export type PeerRole = 'child' | 'parent'
 
@@ -6,53 +9,24 @@ export interface PeerCallbacks {
   onTrack?: (stream: MediaStream) => void
   onStateChange?: (state: RTCPeerConnectionState) => void
   onChannel?: (channel: RTCDataChannel) => void
+  onNegotiation?: (description: NegotiationDescription) => void
+  onNegotiationError?: (cause: unknown) => void
 }
 
 export type PeerFactory = (configuration: RTCConfiguration) => RTCPeerConnection
 
 const defaultFactory: PeerFactory = (configuration) => new RTCPeerConnection(configuration)
 
-const ICE_GATHERING_TIMEOUT_MS = 15_000
-
-export function waitForIceGathering(
-  connection: RTCPeerConnection,
-  timeoutMs = ICE_GATHERING_TIMEOUT_MS
-): Promise<void> {
-  if (connection.iceGatheringState === 'complete') return Promise.resolve()
-
-  return new Promise((resolve, reject) => {
-    let settled = false
-
-    const finish = (error?: Error) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      connection.removeEventListener('icegatheringstatechange', check)
-      if (error) reject(error)
-      else resolve()
-    }
-
-    const check = () => {
-      if (connection.iceGatheringState === 'complete') finish()
-    }
-
-    const timer = setTimeout(
-      () => finish(new Error('ICE gathering did not complete in time. Try again.')),
-      timeoutMs
-    )
-    connection.addEventListener('icegatheringstatechange', check)
-    check()
-  })
-}
-
 /**
- * Thin wrapper around one RTCPeerConnection. It owns the audio/video senders and
- * the single ordered control data channel; media and control are both DTLS-SRTP
- * encrypted by the browser. No STUN or TURN servers are configured.
+ * Thin wrapper around one RTCPeerConnection. Pairing creates only a data channel;
+ * audio and video are added after that channel is open and negotiated over it.
+ * Media and control are both DTLS-SRTP encrypted by the browser. No STUN or TURN
+ * servers are configured.
  */
 export class PeerSession {
   private readonly connection: RTCPeerConnection
   private readonly callbacks: PeerCallbacks
+  private readonly negotiator: PerfectNegotiator
   private channel: RTCDataChannel | null = null
 
   constructor(
@@ -62,10 +36,16 @@ export class PeerSession {
   ) {
     this.callbacks = callbacks
     this.connection = factory({ iceServers: [] })
+    this.negotiator = new PerfectNegotiator(
+      this.connection,
+      role === 'parent',
+      (description) => this.callbacks.onNegotiation?.(description),
+      (cause) => this.callbacks.onNegotiationError?.(cause)
+    )
 
     this.connection.ontrack = (event) => {
-      const stream = event.streams[0]
-      if (stream) this.callbacks.onTrack?.(stream)
+      const stream = event.streams[0] ?? new MediaStream([event.track])
+      this.callbacks.onTrack?.(stream)
     }
     this.connection.onconnectionstatechange = () => {
       this.callbacks.onStateChange?.(this.connection.connectionState)
@@ -83,13 +63,8 @@ export class PeerSession {
     return this.channel
   }
 
-  async createOffer(stream: MediaStream): Promise<string> {
-    for (const track of stream.getTracks()) {
-      this.connection.addTrack(track, stream)
-    }
-    this.limitCodecs()
+  async createDataOffer(): Promise<string> {
     this.bindChannel(this.connection.createDataChannel('control', { ordered: true }))
-
     const offer = await this.connection.createOffer()
     await this.connection.setLocalDescription(offer)
     await waitForIceGathering(this.connection)
@@ -98,7 +73,7 @@ export class PeerSession {
     return sdp
   }
 
-  async acceptOffer(offerSdp: string): Promise<string> {
+  async acceptDataOffer(offerSdp: string): Promise<string> {
     await this.connection.setRemoteDescription({ type: 'offer', sdp: offerSdp })
     const answer = await this.connection.createAnswer()
     await this.connection.setLocalDescription(answer)
@@ -108,8 +83,20 @@ export class PeerSession {
     return sdp
   }
 
-  async acceptAnswer(answerSdp: string): Promise<void> {
+  async acceptDataAnswer(answerSdp: string): Promise<void> {
     await this.connection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
+  }
+
+  startMedia(stream: MediaStream): void {
+    for (const track of stream.getTracks()) {
+      this.connection.addTrack(track, stream)
+    }
+    this.limitCodecs()
+    this.negotiator.enable()
+  }
+
+  async handleNegotiation(description: NegotiationDescription): Promise<void> {
+    await this.negotiator.handle(description)
   }
 
   send(message: ControlMessage): void {
@@ -122,6 +109,7 @@ export class PeerSession {
   close(): void {
     this.channel?.close()
     this.channel = null
+    this.connection.onnegotiationneeded = null
     this.connection.close()
   }
 
@@ -131,8 +119,8 @@ export class PeerSession {
   }
 
   /**
-   * Offer every codec Chrome knows by default and the SDP grows past three QR
-   * codes. Opus and VP8 are enough for a monitor and keep the offer to two.
+   * Offer every codec Chrome knows by default and the SDP grows large. Opus and
+   * VP8 are enough for a monitor and keep the media offer inside one control message.
    */
   private limitCodecs(): void {
     if (typeof RTCRtpSender.getCapabilities !== 'function') return

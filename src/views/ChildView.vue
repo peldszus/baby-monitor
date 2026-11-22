@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import QrScanner from '@/components/QrScanner.vue'
@@ -40,8 +40,10 @@ async function submitAnswer(): Promise<void> {
 }
 
 async function onScanned(text: string): Promise<void> {
+  scannerOpen.value = false
+  await nextTick()
   const accepted = await acceptAnswer(text)
-  if (accepted) scannerOpen.value = false
+  if (accepted) pasteText.value = ''
 }
 
 function startOver(): void {
@@ -61,8 +63,9 @@ function startOver(): void {
         <h2>Child device</h2>
       </div>
       <p>This device sends video and audio. Keep it on a charger and pointed at your little one.</p>
+      <p>The camera starts after the parent has accepted the pairing code.</p>
       <v-btn color="primary" size="large" block data-testid="start-child" @click="start">
-        Start camera and create code
+        Create pairing code
       </v-btn>
     </section>
 

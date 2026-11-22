@@ -1,12 +1,14 @@
 import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import {
   createHello,
+  createNegotiate,
   createPing,
   createPong,
   decodeControlMessage,
   encodeControlMessage,
 } from '@/core/control'
 import { openChildMedia, stopStream } from '@/core/media-child'
+import type { NegotiationDescription } from '@/core/negotiation'
 import { PeerSession, type PeerRole } from '@/core/peer'
 import {
   decodeSignal,
@@ -66,6 +68,8 @@ export function usePeerSession(role: PeerRole) {
   let offerSdp = ''
   let answerSdp = ''
   let closedByUs = false
+  let mediaStarted = false
+  let mediaReady = false
 
   const offerCollector = new SignalChunkCollector()
   const answerCollector = new SignalChunkCollector()
@@ -83,6 +87,8 @@ export function usePeerSession(role: PeerRole) {
     }
     channel = null
     channelOpen.value = false
+    mediaStarted = false
+    mediaReady = false
     stopStream(localStream.value)
     localStream.value = null
     remoteStream.value = null
@@ -108,7 +114,16 @@ export function usePeerSession(role: PeerRole) {
     cleanupPeer()
   }
 
-  function handleControl(raw: unknown): void {
+  function maybeConnected(): void {
+    if (!mediaReady || peerState.value !== 'connected') return
+    if (state.value === 'connecting') send('connected')
+    else if (state.value === 'degraded') send('recovered')
+    else return
+    pairingProgress.value = null
+    void refreshShortCode()
+  }
+
+  async function handleControl(raw: unknown): Promise<void> {
     const result = decodeControlMessage(raw)
     if (!result.ok) return
     const message = result.message
@@ -121,24 +136,67 @@ export function usePeerSession(role: PeerRole) {
     }
     if (message.type === 'pong') {
       rttMs.value = Math.max(0, Math.round(performance.now() - message.t))
+      return
+    }
+    if (message.type === 'negotiate') {
+      if (!peer) return
+      try {
+        await peer.handleNegotiation(message.description)
+        mediaReady = true
+        maybeConnected()
+      } catch (cause) {
+        fail(cause, 'Could not negotiate audio and video.')
+      }
+    }
+  }
+
+  async function onChannelReady(): Promise<void> {
+    if (role === 'parent') {
+      pairingProgress.value = 'Connecting media…'
+      return
+    }
+    if (mediaStarted) return
+    mediaStarted = true
+    pairingProgress.value = 'Starting camera and microphone…'
+    try {
+      const stream = await openChildMedia()
+      if (closedByUs || !peer) {
+        stopStream(stream)
+        return
+      }
+      localStream.value = stream
+      pairingProgress.value = 'Connecting media…'
+      peer.startMedia(stream)
+    } catch (cause) {
+      fail(cause, 'Could not start the camera and microphone.')
     }
   }
 
   function attachChannel(nextChannel: RTCDataChannel): void {
     channel = nextChannel
     channelOpen.value = nextChannel.readyState === 'open'
+    let announced = false
 
     const announce = () => {
-      if (nextChannel.readyState !== 'open') return
+      if (announced || nextChannel.readyState !== 'open') return
+      announced = true
       channelOpen.value = true
-      nextChannel.send(encodeControlMessage(createHello(role, detectCapabilities())))
+      try {
+        nextChannel.send(encodeControlMessage(createHello(role, detectCapabilities())))
+      } catch (cause) {
+        fail(cause, 'Could not send the control handshake.')
+        return
+      }
+      void onChannelReady()
     }
 
     nextChannel.onopen = announce
     nextChannel.onclose = () => {
       channelOpen.value = false
     }
-    nextChannel.onmessage = (event) => handleControl(event.data)
+    nextChannel.onmessage = (event) => {
+      void handleControl(event.data)
+    }
 
     if (nextChannel.readyState === 'open') announce()
   }
@@ -153,6 +211,8 @@ export function usePeerSession(role: PeerRole) {
 
   function createPeer(): PeerSession {
     closedByUs = false
+    mediaStarted = false
+    mediaReady = false
     return new PeerSession(role, {
       onTrack: (stream) => {
         remoteStream.value = stream
@@ -161,8 +221,7 @@ export function usePeerSession(role: PeerRole) {
         if (closedByUs) return
         peerState.value = nextState
         if (nextState === 'connected') {
-          send('connected')
-          void refreshShortCode()
+          maybeConnected()
         } else if (nextState === 'disconnected') {
           send('degraded')
         } else if (nextState === 'failed' || nextState === 'closed') {
@@ -172,6 +231,21 @@ export function usePeerSession(role: PeerRole) {
         }
       },
       onChannel: attachChannel,
+      onNegotiation: (description: NegotiationDescription) => {
+        if (!channel || channel.readyState !== 'open') {
+          fail(
+            new Error('The control channel is not open for media negotiation.'),
+            'Could not negotiate audio and video.'
+          )
+          return
+        }
+        try {
+          channel.send(encodeControlMessage(createNegotiate(description)))
+        } catch (cause) {
+          fail(cause, 'Could not negotiate audio and video.')
+        }
+      },
+      onNegotiationError: (cause) => fail(cause, 'Could not negotiate audio and video.'),
     })
   }
 
@@ -184,16 +258,14 @@ export function usePeerSession(role: PeerRole) {
     send('start-pairing')
 
     try {
-      const stream = await openChildMedia()
-      localStream.value = stream
       peer = createPeer()
-      offerSdp = await peer.createOffer(stream)
+      offerSdp = await peer.createDataOffer()
       const encoded = await encodeSignal('offer', offerSdp)
       offerChunks.value = encoded.chunks
       offerExpiresAt.value = encoded.expiresAt
       return true
     } catch (cause) {
-      fail(cause, 'Could not start the camera and microphone.')
+      fail(cause, 'Could not create the pairing code.')
       return false
     }
   }
@@ -234,7 +306,7 @@ export function usePeerSession(role: PeerRole) {
 
     try {
       peer = createPeer()
-      answerSdp = await peer.acceptOffer(offerSdp)
+      answerSdp = await peer.acceptDataOffer(offerSdp)
       const encoded = await encodeSignal('answer', answerSdp)
       answerChunks.value = encoded.chunks
       answerExpiresAt.value = encoded.expiresAt
@@ -250,7 +322,7 @@ export function usePeerSession(role: PeerRole) {
 
   async function acceptAnswer(text: string): Promise<boolean> {
     if (!peer) {
-      error.value = 'Start the camera before scanning the answer.'
+      error.value = 'Start pairing before scanning the answer.'
       return false
     }
     if (state.value !== 'pairing') {
@@ -281,9 +353,9 @@ export function usePeerSession(role: PeerRole) {
 
     try {
       answerSdp = decoded.payload.sdp
-      await peer.acceptAnswer(answerSdp)
+      await peer.acceptDataAnswer(answerSdp)
       send('connect')
-      pairingProgress.value = null
+      pairingProgress.value = 'Connecting media…'
       void refreshShortCode()
       return true
     } catch (cause) {

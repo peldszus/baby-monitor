@@ -131,7 +131,11 @@ function startOver(): void {
           auto-grow
           data-testid="answer-text"
         />
-        <p class="progress">Waiting for the child device to accept the answer…</p>
+        <p class="progress">
+          {{
+            channelOpen ? 'Connecting media…' : 'Waiting for the child device to accept the answer…'
+          }}
+        </p>
         <v-btn variant="text" block @click="startOver">Start over</v-btn>
       </section>
     </template>

@@ -18,6 +18,8 @@ test.describe('pairing', () => {
       await expect.poll(() => offerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
       const offer = await offerBox.inputValue()
       expect(offer).toContain('BM1|')
+      expect(offer.split(/\s+/).filter(Boolean)).toHaveLength(1)
+      expect(offer.length).toBeLessThan(400)
       await expect(child.getByTestId('qr-code')).toBeVisible()
       await expect(child.getByTestId('qr-expiry')).toHaveText(/Valid for \d+s/)
 
@@ -28,6 +30,8 @@ test.describe('pairing', () => {
       const answerBox = parent.getByTestId('answer-text').getByRole('textbox')
       await expect.poll(() => answerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
       const answer = await answerBox.inputValue()
+      expect(answer.split(/\s+/).filter(Boolean)).toHaveLength(1)
+      expect(answer.length).toBeLessThan(400)
       await expect(parent.getByTestId('qr-code')).toBeVisible()
 
       await child.getByTestId('paste-input').getByRole('textbox').fill(answer)

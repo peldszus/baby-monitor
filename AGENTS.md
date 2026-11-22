@@ -46,9 +46,10 @@ src/
   core/
     state.ts                 # Explicit idle → pairing → connecting → connected → degraded → lost
     control.ts               # Versioned data-channel protocol with strict validation
-    signaling-qr.ts          # SDP compression, Base64url, CRC-32, chunking and expiry
+    signaling-qr.ts          # Compact handshake codec, full-SDP fallback, CRC-32 and expiry
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
-    peer.ts                  # RTCPeerConnection wrapper, ICE gathering, data channel
+    negotiation.ts           # Perfect negotiation for media over the data channel
+    peer.ts                  # RTCPeerConnection wrapper, data handshake, media negotiation
     media-child.ts           # getUserMedia adapter and stream cleanup
     scanner.ts               # BarcodeDetector scanner with jsQR fallback
   composables/
@@ -78,17 +79,22 @@ that directory.
 - `usePeerSession` is the single orchestrator. It owns the `PeerSession`, local and remote streams,
   the pairing collectors, the short code and the RTT, and it is the only place that advances the
   state machine.
-- Pairing codes are `BM1|<index>|<total>|<crc32>|<data>` chunks. The data is
-  `z`/`p` + Base64url(JSON), where `z` means `deflate-raw` compressed. The JSON payload carries the
-  kind, SDP, creation time and a two-minute expiry. `decodeSignal` rejects bad checksums, missing
-  chunks and expired codes. `SignalChunkCollector` accepts chunks in any scan order.
+- Pairing codes are `BM1|<index>|<total>|<crc32>|<data>` chunks. The compact payload is a
+  fixed-layout binary record (version, kind, expiry, ICE ufrag/pwd, 32-byte SHA-256 fingerprint,
+  DTLS setup role and one or two host candidates), Base64url encoded. The receiver rebuilds a
+  data-channel-only SDP from a shared template and validates every field before it reaches
+  `setRemoteDescription`. Version 2 is a compressed full-SDP fallback. `decodeSignal` rejects bad
+  checksums, missing chunks, expired codes and unsafe payloads; `SignalChunkCollector` accepts
+  chunks in any scan order.
 - The control channel is one ordered `RTCDataChannel` labelled `control`. Messages are versioned
   JSON with an `id`, and `decodeControlMessage` rejects unknown types, bad shapes, oversized
-  messages and out-of-range values. Only `hello`, `ping` and `pong` exist in M0/M1.
+  messages and out-of-range values. `hello`, `ping`, `pong` and `negotiate` exist in M0/M1.
 - `PeerSession` always uses `iceServers: []`, waits for complete ICE gathering before returning an
-  SDP, and keeps media and control on the same encrypted peer connection.
-- The child offer is limited to Opus and VP8. Chrome's full codec list triples the offer SDP and
-  forces a third, denser QR code.
+  SDP, and keeps media and control on the same encrypted peer connection. Pairing creates only the
+  data channel; `startMedia` adds the child's tracks after the channel is open and triggers a media
+  offer over `negotiate`. `PerfectNegotiator` keeps the parent polite.
+- The media offer is limited to Opus and VP8 so its SDP fits in one control message. The QR code
+  contains no codec details.
 - Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
 - Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
@@ -100,16 +106,18 @@ that directory.
 Current milestone status:
 
 - **M0 (prototype):** complete — copy/paste SDP, child/parent media, data-channel ping.
-- **M1 (pairing):** complete — compressed/chunked QR offer and answer, scanner, expiry, short code,
-  Playwright two-context test.
-- **M2 (control):** next — audio/video toggles, frame rate, resolution, bitrate, gain and status.
+- **M1 (pairing):** complete — compact single-code QR offer and answer, full-SDP fallback, scanner,
+  expiry, short code, media negotiation over the data channel, Playwright two-context test.
+- **M2 (control):** in progress — media negotiation over the data channel is complete; audio/video
+  toggles, frame rate, resolution, bitrate, gain and status are next.
 
 ## End-to-End Tests
 
 `e2e/pairing.spec.ts` starts Vite on `127.0.0.1:4173` and opens two isolated Chromium contexts. The
 launch flags supply fake camera/microphone input and disable mDNS host-candidate hiding, so the two
 contexts build a real WebRTC connection. The test drives the full offer/answer flow through the text
-fallback, then asserts the parent receives video, both short codes match, and a ping produces an RTT.
+fallback, asserts both codes are a single compact chunk, then checks that media is negotiated over
+the data channel, the parent receives video, both short codes match, and a ping produces an RTT.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
 `npx playwright install chromium`.

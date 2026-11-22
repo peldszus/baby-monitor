@@ -110,6 +110,7 @@ export function createQrScanner(): QrScanner {
   return {
     async start(video, onResult, sourceStream) {
       if (running) return
+      const token = ++generation
 
       if (sourceStream) {
         stream = sourceStream
@@ -118,7 +119,7 @@ export function createQrScanner(): QrScanner {
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('Camera access is not available in this browser.')
         }
-        stream = await navigator.mediaDevices.getUserMedia({
+        const nextStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
             width: { ideal: 1280 },
@@ -126,6 +127,11 @@ export function createQrScanner(): QrScanner {
           },
           audio: false,
         })
+        if (token !== generation) {
+          for (const track of nextStream.getTracks()) track.stop()
+          return
+        }
+        stream = nextStream
         ownsStream = true
       }
 
@@ -133,10 +139,18 @@ export function createQrScanner(): QrScanner {
       video.muted = true
       video.playsInline = true
       await video.play()
+      if (token !== generation) {
+        if (stream && ownsStream) {
+          for (const track of stream.getTracks()) track.stop()
+        }
+        stream = null
+        ownsStream = false
+        return
+      }
       running = true
-      const token = ++generation
 
       const detector = await createBarcodeDetector()
+      if (token !== generation) return
       void detectLoop(video, onResult, detector, token)
     },
 

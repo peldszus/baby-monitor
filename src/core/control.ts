@@ -1,3 +1,5 @@
+import type { NegotiationDescription } from './negotiation'
+
 export type ControlRole = 'child' | 'parent'
 
 interface MessageBase {
@@ -23,16 +25,22 @@ export interface PongMessage extends MessageBase {
   t: number
 }
 
-export type ControlMessage = HelloMessage | PingMessage | PongMessage
+export interface NegotiateMessage extends MessageBase {
+  type: 'negotiate'
+  description: NegotiationDescription
+}
+
+export type ControlMessage = HelloMessage | PingMessage | PongMessage | NegotiateMessage
 
 export type DecodeFailure = 'too-large' | 'invalid-json' | 'invalid-shape' | 'unknown-type'
 
 export type DecodeResult =
   { ok: true; message: ControlMessage } | { ok: false; reason: DecodeFailure }
 
-export const MAX_CONTROL_MESSAGE_BYTES = 8 * 1024
+export const MAX_CONTROL_MESSAGE_BYTES = 16 * 1024
 const MAX_CAPS = 32
 const MAX_CAP_LENGTH = 64
+const MAX_NEGOTIATION_SDP_CHARS = 12_000
 
 const encoder = new TextEncoder()
 
@@ -57,6 +65,10 @@ export function createPing(t: number): PingMessage {
 
 export function createPong(t: number): PongMessage {
   return { v: 1, id: makeId(), type: 'pong', t }
+}
+
+export function createNegotiate(description: NegotiationDescription): NegotiateMessage {
+  return { v: 1, id: makeId(), type: 'negotiate', description }
 }
 
 export function encodeControlMessage(message: ControlMessage): string {
@@ -112,6 +124,31 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
           type: 'hello',
           role: value.role,
           caps: value.caps,
+        },
+      }
+    }
+    case 'negotiate': {
+      if (!isRecord(value.description)) {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      const description = value.description
+      if (description.type !== 'offer' && description.type !== 'answer') {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      if (
+        typeof description.sdp !== 'string' ||
+        description.sdp.length === 0 ||
+        description.sdp.length > MAX_NEGOTIATION_SDP_CHARS
+      ) {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      return {
+        ok: true,
+        message: {
+          v: 1,
+          id: value.id,
+          type: 'negotiate',
+          description: { type: description.type, sdp: description.sdp },
         },
       }
     }

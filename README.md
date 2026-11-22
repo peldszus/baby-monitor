@@ -4,22 +4,27 @@ A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
 The current build covers Milestones 0 and 1 from the
-[concept](Baby%20Monitor%20PWA%20–%20Concept%20and%20Feasibility%20Study.md): SDP exchange by
-copy/paste or QR code, live media, and a data-channel ping. Media controls, wake locks, heartbeat
-alarms and presentation features are still to come.
+[concept](docs/babyphone-concept.md), plus the media-negotiation part of M2: a compact data-channel
+handshake by QR code or copy/paste, media negotiated over that encrypted channel, and a
+data-channel ping. Media controls, wake locks, heartbeat alarms and presentation features are
+still to come.
 
 ## Pairing
 
-1. Open the app on the child device and choose **Child device**. Grant camera and microphone
-   access. The device uses the rear/main camera and shows an offer QR code (or a text code).
+1. Open the app on the child device and choose **Child device**. Create the pairing code and show
+   it to the parent. The camera does not start yet.
 2. Open the app on the parent device and choose **Parent device**. Scan the child code, or paste
    the text code. The parent shows an answer QR code.
-3. Scan or paste the answer on the child device. Both sides connect and show the live stream.
+3. Scan or paste the answer on the child device. The data channel opens, then the child starts its
+   rear/main camera and negotiates audio and video over that channel. Both sides show the live
+   stream.
 
-Pairing codes are compressed and expire after two minutes. Large SDPs are split across several QR
-codes. The scanner reads continuously while the dialog is open; there is no shutter button. The
-offer is limited to Opus and VP8 so the code stays small. Both devices derive the same six-digit
-short code from the DTLS fingerprints so you can compare them out of band.
+The QR code carries only the ICE credentials, DTLS fingerprint and host candidates; the rest of the
+data-channel SDP comes from a shared template. It is one small code per direction and expires after
+two minutes. A compressed full-SDP fallback still supports chunking if a browser combination needs
+it. The scanner reads continuously while the dialog is open; there is no shutter button. Both
+devices derive the same six-digit short code from the DTLS fingerprints so you can compare them out
+of band.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation. There is no reconnection after a network change yet; pair again if the connection is
