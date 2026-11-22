@@ -18,7 +18,7 @@ const labels: Record<SessionState, string> = {
 }
 
 const colors: Record<SessionState, string> = {
-  idle: 'on-surface-variant',
+  idle: 'on-surface-muted',
   pairing: 'info',
   connecting: 'info',
   connected: 'success',
@@ -50,6 +50,6 @@ const color = computed(() => colors[props.state])
 
 .peer-state {
   font-size: 0.875rem;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 </style>

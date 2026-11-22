@@ -16,9 +16,10 @@ export async function openChildMedia(options: ChildMediaOptions = {}): Promise<M
       deviceId: options.audioDeviceId ? { exact: options.audioDeviceId } : undefined,
     },
     video: {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      frameRate: { ideal: 10, max: 15 },
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 15, max: 30 },
       deviceId: options.videoDeviceId ? { exact: options.videoDeviceId } : undefined,
     },
   })

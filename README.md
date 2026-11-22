@@ -11,7 +11,7 @@ alarms and presentation features are still to come.
 ## Pairing
 
 1. Open the app on the child device and choose **Child device**. Grant camera and microphone
-   access. The device shows an offer QR code (or a text code).
+   access. The device uses the rear/main camera and shows an offer QR code (or a text code).
 2. Open the app on the parent device and choose **Parent device**. Scan the child code, or paste
    the text code. The parent shows an answer QR code.
 3. Scan or paste the answer on the child device. Both sides connect and show the live stream.

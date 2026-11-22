@@ -89,6 +89,10 @@ that directory.
   SDP, and keeps media and control on the same encrypted peer connection.
 - The child offer is limited to Opus and VP8. Chrome's full codec list triples the offer SDP and
   forces a third, denser QR code.
+- Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
+  The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
+- Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
+  pair and is near-white in the light theme, which is unreadable on the neutral panels.
 - The short code is the first four bytes of SHA-256 over the sorted, deduplicated DTLS fingerprints
   from both SDPs, reduced to six digits. It is computed locally on both devices.
 - No SDP or pairing secret is logged or persisted. There is no analytics and no runtime CDN.

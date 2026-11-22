@@ -116,6 +116,6 @@ function choose(path: string): void {
   margin: 0;
   font-size: 0.75rem;
   text-align: center;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 </style>

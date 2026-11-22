@@ -51,6 +51,9 @@ export const lightTheme: ThemeDefinition = {
 
     'surface-variant': '#2D3133',
     'on-surface-variant': '#EFF1F2',
+    // Vuetify's surface-variant pair is M3 inverse-surface, so secondary text
+    // on neutral surfaces needs its own accessible token.
+    'on-surface-muted': '#3F484B',
 
     outline: '#6F797D',
     'outline-variant': '#BEC8CB',
@@ -106,6 +109,7 @@ export const darkTheme: ThemeDefinition = {
 
     'surface-variant': '#DFE3E5',
     'on-surface-variant': '#2D3133',
+    'on-surface-muted': '#BEC8CB',
 
     outline: '#899296',
     'outline-variant': '#3F484B',

@@ -180,7 +180,7 @@ function startOver(): void {
 
 .progress {
   font-size: 0.875rem;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 
 .short-code-panel {
@@ -199,6 +199,6 @@ function startOver(): void {
   margin: 0;
   font-size: 0.75rem;
   text-align: center;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 </style>

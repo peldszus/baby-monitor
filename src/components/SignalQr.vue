@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
 .qr-label {
   margin: 0;
   font-size: 0.875rem;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 
 .qr-nav {
@@ -114,6 +114,6 @@ onBeforeUnmount(() => {
 .qr-expiry {
   margin: 0;
   font-size: 0.875rem;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-on-surface-muted));
 }
 </style>
