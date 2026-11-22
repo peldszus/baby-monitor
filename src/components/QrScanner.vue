@@ -6,6 +6,8 @@ const props = defineProps<{
   modelValue: boolean
   /** Reuse an existing camera stream instead of opening a second one. */
   stream?: MediaStream | null
+  /** Multi-code progress from the pairing session. */
+  progress?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -97,6 +99,7 @@ onBeforeUnmount(stop)
           }}
         </p>
         <p class="scanner-hint">Scanning is automatic. There is no shutter button.</p>
+        <p v-if="progress" class="scanner-hint" data-testid="scanner-progress">{{ progress }}</p>
       </v-card-text>
       <v-card-actions>
         <v-spacer />

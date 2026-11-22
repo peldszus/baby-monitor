@@ -157,7 +157,7 @@ function startOver(): void {
 
     <p class="disclaimer">This app is not a medical device and does not replace supervision.</p>
 
-    <QrScanner v-model="scannerOpen" @decoded="onScanned" />
+    <QrScanner v-model="scannerOpen" :progress="pairingProgress" @decoded="onScanned" />
   </div>
 </template>
 
