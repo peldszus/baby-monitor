@@ -63,6 +63,14 @@ function applyPlayback(): void {
   }
 }
 
+function syncCanvasAudio(): void {
+  if (pipMode.value !== 'canvas' || !canvasStream || !props.stream) return
+  for (const track of canvasStream.getAudioTracks()) canvasStream.removeTrack(track)
+  if (props.muted) return
+  const audio = props.stream.getAudioTracks().find((track) => track.readyState === 'live')
+  if (audio) canvasStream.addTrack(audio)
+}
+
 function updateVideoSize(): void {
   const element = video.value
   if (!element) return
@@ -291,7 +299,9 @@ async function startCanvasPip(): Promise<void> {
   }
   drawFrame()
   const stream = element.captureStream(30)
-  const audio = props.stream.getAudioTracks().find((track) => track.readyState === 'live')
+  const audio = props.muted
+    ? undefined
+    : props.stream.getAudioTracks().find((track) => track.readyState === 'live')
   if (audio) stream.addTrack(audio)
   canvasStream = stream
   pip.srcObject = stream
@@ -332,7 +342,14 @@ async function togglePip(): Promise<void> {
 }
 
 watch(() => props.stream, attach)
-watch(() => [props.muted, props.volume], applyPlayback)
+watch(
+  () => props.muted,
+  () => {
+    applyPlayback()
+    syncCanvasAudio()
+  }
+)
+watch(() => props.volume, applyPlayback)
 watch(
   () => [
     presentation.value.rotation,
