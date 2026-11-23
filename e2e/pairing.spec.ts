@@ -97,13 +97,23 @@ test.describe('pairing', () => {
       ).toBe(1)
 
       await parent.getByTestId('fps-5').click()
-      await expect(mediaStatus).toContainText('5 fps')
+      // Measured fps is rounded from a one-second sample, so allow 3-7 for a
+      // 5 fps target instead of requiring an exact count.
+      await expect(mediaStatus).toContainText(/[3-7] fps/)
 
       await parent.getByTestId('resolution-2').click()
       await expect(mediaStatus).toContainText('640×360')
 
       await parent.getByTestId('bitrate-250000').click()
-      await expect(mediaStatus).toContainText('kbps')
+      await expect
+        .poll(
+          async () => {
+            const match = (await mediaStatus.innerText()).match(/(\d+) kbps/)
+            return match ? Number(match[1]) : 0
+          },
+          { timeout: 30_000 }
+        )
+        .toBeGreaterThan(0)
 
       const noiseToggle = parent.getByTestId('noise-toggle').locator('input')
       await noiseToggle.click()
