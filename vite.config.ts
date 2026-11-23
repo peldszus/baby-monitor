@@ -48,6 +48,34 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  optimizeDeps: {
+    // Vite discovers Vuetify's auto-imported components lazily. On a cold cache
+    // that discovery triggers a full page reload, which can reset an E2E pairing.
+    include: [
+      'vuetify/components/VAlert',
+      'vuetify/components/VApp',
+      'vuetify/components/VAppBar',
+      'vuetify/components/VBtn',
+      'vuetify/components/VBtnToggle',
+      'vuetify/components/VCard',
+      'vuetify/components/VChip',
+      'vuetify/components/VDialog',
+      'vuetify/components/VGrid',
+      'vuetify/components/VIcon',
+      'vuetify/components/VMain',
+      'vuetify/components/VProgressLinear',
+      'vuetify/components/VSlider',
+      'vuetify/components/VSwitch',
+      'vuetify/components/VTextarea',
+    ],
+  },
+  server: {
+    watch: {
+      // Playwright writes traces while the dev server runs. Without this ignore
+      // Vite treats those files as outside the module graph and reloads the page.
+      ignored: ['**/test-results/**', '**/playwright-report/**'],
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],

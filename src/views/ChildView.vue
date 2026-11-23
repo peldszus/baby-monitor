@@ -2,8 +2,10 @@
 import { computed, nextTick, ref } from 'vue'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
+import PairingSteps from '@/components/PairingSteps.vue'
 import QrScanner from '@/components/QrScanner.vue'
 import SignalQr from '@/components/SignalQr.vue'
+import TextCodePanel from '@/components/TextCodePanel.vue'
 import VideoStream from '@/components/VideoStream.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
 
@@ -18,17 +20,49 @@ const {
   rttMs,
   peerState,
   channelOpen,
+  mediaStatus,
+  batteryLevel,
+  charging,
   startChild,
   acceptAnswer,
-  sendPing,
   reset,
 } = usePeerSession('child')
 
 const scannerOpen = ref(false)
 const pasteText = ref('')
 const offerText = computed(() => offerChunks.value.join('\n'))
-const pairingVisible = computed(() => state.value === 'pairing' || state.value === 'connecting')
+const offerReady = computed(() => offerChunks.value.length > 0)
 const monitoring = computed(() => state.value === 'connected' || state.value === 'degraded')
+const pairingStep = computed(() => {
+  if (monitoring.value || state.value === 'connecting' || channelOpen.value) return 3
+  if (state.value === 'pairing' && offerReady.value) return 2
+  return 1
+})
+
+const statusLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for media status…'
+  const video = status.videoEnabled ? 'Video on' : 'Video off'
+  return `${video} · ${status.width}×${status.height} · ${status.fps} fps · ${formatBitrate(status.bitrate)}`
+})
+
+const audioLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for microphone status…'
+  const audio = status.audioEnabled ? 'Mic on' : 'Mic off'
+  const processing = `NS ${status.noiseSuppression ? 'on' : 'off'} · AGC ${status.autoGainControl ? 'on' : 'off'}`
+  return `${audio} · gain ${status.gain.toFixed(1)} · level ${Math.round(status.audioLevel * 100)}% · ${processing}`
+})
+
+const batteryLine = computed(() => {
+  if (batteryLevel.value === null) return null
+  return `${batteryLevel.value}%${charging.value ? ' charging' : ''}`
+})
+
+function formatBitrate(bitsPerSecond: number): string {
+  if (bitsPerSecond >= 1_000_000) return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`
+  return `${Math.round(bitsPerSecond / 1000)} kbps`
+}
 
 async function start(): Promise<void> {
   await startChild()
@@ -54,85 +88,91 @@ function startOver(): void {
 </script>
 
 <template>
-  <div class="view">
+  <div class="view" :class="{ pairing: !monitoring }">
     <v-alert v-if="error" type="error" variant="tonal" data-testid="error">{{ error }}</v-alert>
 
-    <section v-if="state === 'idle' || state === 'lost'" class="panel">
+    <PairingSteps v-if="!monitoring" :current="pairingStep" />
+
+    <section v-if="state === 'idle' || state === 'lost'" class="panel intro-panel">
       <div class="panel-heading">
         <v-icon :icon="mdiCameraOutline" color="primary" />
         <h2>Child device</h2>
       </div>
-      <p>This device sends video and audio. Keep it on a charger and pointed at your little one.</p>
-      <p>The camera starts after the parent has accepted the pairing code.</p>
+      <p>This device sends video and audio. Keep it charged and pointed at your little one.</p>
       <v-btn color="primary" size="large" block data-testid="start-child" @click="start">
-        Create pairing code
+        Generate pairing code
       </v-btn>
     </section>
 
-    <template v-else-if="pairingVisible">
-      <section class="panel">
-        <h2>1. Show this code to the parent</h2>
-        <SignalQr :chunks="offerChunks" label="Child pairing code" :expires-at="offerExpiresAt" />
-        <v-textarea
-          readonly
-          :model-value="offerText"
-          label="Text code (copy and paste)"
-          rows="2"
-          auto-grow
-          data-testid="offer-text"
-        />
-      </section>
+    <section v-else-if="state === 'pairing' && !offerReady" class="panel connecting-panel">
+      <v-progress-circular indeterminate color="primary" size="44" />
+      <p data-testid="pairing-progress">Creating pairing code…</p>
+    </section>
 
-      <section class="panel">
-        <h2>2. Scan the parent's answer</h2>
-        <v-btn
-          variant="tonal"
-          block
-          :prepend-icon="mdiQrcodeScan"
-          data-testid="scan-answer"
-          @click="scannerOpen = true"
-        >
-          Scan answer QR
+    <section v-else-if="state === 'pairing' && !channelOpen" class="panel pairing-panel">
+      <div class="panel-heading">
+        <h2>Show this code to the parent</h2>
+        <v-btn variant="text" size="small" class="heading-action" @click="startOver">
+          Start over
         </v-btn>
-        <v-textarea
-          v-model="pasteText"
-          label="Paste the parent answer"
-          rows="3"
-          auto-grow
-          data-testid="paste-input"
-        />
-        <v-btn
-          color="primary"
-          block
-          :disabled="!pasteText.trim()"
-          data-testid="submit-answer"
-          @click="submitAnswer"
-        >
-          Finish pairing
-        </v-btn>
-        <p v-if="pairingProgress" class="progress" data-testid="pairing-progress">
-          {{ pairingProgress }}
-        </p>
-        <v-btn variant="text" block @click="startOver">Start over</v-btn>
-      </section>
-    </template>
+      </div>
+      <SignalQr :chunks="offerChunks" label="Child pairing code" :expires-at="offerExpiresAt" />
+      <v-btn
+        color="primary"
+        block
+        :prepend-icon="mdiQrcodeScan"
+        data-testid="scan-answer"
+        @click="scannerOpen = true"
+      >
+        Scan parent's answer
+      </v-btn>
+      <TextCodePanel
+        title="Show text code instead"
+        label="Child pairing code"
+        :model-value="offerText"
+        test-id="offer-text"
+        readonly
+      />
+      <TextCodePanel
+        v-model="pasteText"
+        title="Enter answer manually"
+        label="Parent answer"
+        test-id="paste-input"
+        action-label="Finish pairing"
+        action-test-id="submit-answer"
+        :action-disabled="!pasteText.trim()"
+        @action="submitAnswer"
+      />
+    </section>
+
+    <section
+      v-else-if="!monitoring && (state === 'connecting' || channelOpen)"
+      class="panel connecting-panel"
+    >
+      <v-progress-circular indeterminate color="primary" size="44" />
+      <h2>Connecting…</h2>
+      <p data-testid="pairing-progress">
+        {{ pairingProgress ?? 'Setting up the encrypted connection…' }}
+      </p>
+      <v-btn variant="text" size="small" @click="startOver">Cancel</v-btn>
+    </section>
 
     <template v-else-if="monitoring">
       <ConnectionStatus :state="state" :peer-state="peerState" :rtt-ms="rttMs" />
       <VideoStream :stream="localStream" muted test-id="local-video" />
+      <section class="panel status-panel">
+        <div class="status-heading">
+          <h2>Live status</h2>
+          <v-chip v-if="batteryLine" size="small" variant="tonal">{{ batteryLine }}</v-chip>
+        </div>
+        <p data-testid="child-media-status">{{ statusLine }}</p>
+        <p data-testid="child-audio-status">{{ audioLine }}</p>
+        <p class="progress">The parent device controls video and sound.</p>
+      </section>
       <section v-if="shortCode" class="panel short-code-panel">
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
       </section>
-      <v-btn
-        variant="tonal"
-        block
-        :disabled="!channelOpen"
-        data-testid="send-ping"
-        @click="sendPing"
-      >
-        Send ping
-      </v-btn>
       <v-btn variant="text" block @click="startOver">Stop monitoring</v-btn>
     </template>
 
@@ -157,6 +197,11 @@ function startOver(): void {
   gap: 20px;
 }
 
+.view.pairing {
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  gap: 8px;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -166,10 +211,19 @@ function startOver(): void {
   background: rgb(var(--v-theme-surface-container));
 }
 
+.pairing .panel {
+  gap: 6px;
+  padding: 12px;
+}
+
 .panel-heading {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.heading-action {
+  margin-left: auto;
 }
 
 .panel h2 {
@@ -177,13 +231,34 @@ function startOver(): void {
   font-size: 1.125rem;
 }
 
+.pairing .panel h2 {
+  font-size: 1rem;
+}
+
 .panel p {
   margin: 0;
+}
+
+.pairing-panel {
+  align-items: stretch;
+}
+
+.connecting-panel {
+  align-items: center;
+  padding: 28px 16px;
+  text-align: center;
 }
 
 .progress {
   font-size: 0.875rem;
   color: rgb(var(--v-theme-on-surface-muted));
+}
+
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .short-code-panel {
@@ -203,5 +278,9 @@ function startOver(): void {
   font-size: 0.75rem;
   text-align: center;
   color: rgb(var(--v-theme-on-surface-muted));
+}
+
+.pairing .disclaimer {
+  font-size: 0.65rem;
 }
 </style>

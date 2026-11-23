@@ -3,21 +3,26 @@
 A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR code, then send
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
-The current build covers Milestones 0 and 1 from the
-[concept](docs/babyphone-concept.md), plus the media-negotiation part of M2: a compact data-channel
-handshake by QR code or copy/paste, media negotiated over that encrypted channel, and a
-data-channel ping. Media controls, wake locks, heartbeat alarms and presentation features are
-still to come.
+The current build covers Milestones 0, 1 and 2 from the
+[concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
+media negotiated over that encrypted channel, and parent controls for video, audio, frame rate,
+resolution, bitrate, microphone gain, noise suppression, automatic gain and volume. The child
+reports the values that actually took effect. Both devices exchange an automatic RTT ping every
+two seconds. Wake locks, heartbeat alarms and presentation features are still to come.
 
 ## Pairing
 
-1. Open the app on the child device and choose **Child device**. Create the pairing code and show
-   it to the parent. The camera does not start yet.
-2. Open the app on the parent device and choose **Parent device**. Scan the child code, or paste
-   the text code. The parent shows an answer QR code.
-3. Scan or paste the answer on the child device. The data channel opens, then the child starts its
-   rear/main camera and negotiates audio and video over that channel. Both sides show the live
-   stream.
+1. Open the app on the child device and choose **Child device**, then tap **Generate pairing
+   code**. The child shows a QR code. The camera does not start yet.
+2. Open the app on the parent device and choose **Parent device**, then tap **Scan child's code**.
+   The parent shows an answer QR code.
+3. On the child, tap **Scan parent's answer** and scan that code. Both devices show a connecting
+   spinner while the data channel opens. The child then starts its rear/main camera and negotiates
+   audio and video; both sides show the live stream.
+
+A three-node indicator marks the child code, parent code and connection steps. Text codes are
+available under a collapsible fallback in each step, and the pairing screens are sized to avoid
+vertical scrolling on phone viewports.
 
 The QR code carries only the ICE credentials, DTLS fingerprint and host candidates; the rest of the
 data-channel SDP comes from a shared template. It is one small code per direction and expires after
@@ -25,6 +30,13 @@ two minutes. A compressed full-SDP fallback still supports chunking if a browser
 it. The scanner reads continuously while the dialog is open; there is no shutter button. Both
 devices derive the same six-digit short code from the DTLS fingerprints so you can compare them out
 of band.
+
+Once connected, the parent device can turn video or audio off and on, change the frame rate,
+resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
+The child stops the camera or microphone track when it is switched off, so the camera light goes
+out. The parent also has a playback volume slider; on iOS the hardware volume may still be the
+effective control. Each device pings the other every two seconds and shows the latest round-trip
+time next to the connection state.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation. There is no reconnection after a network change yet; pair again if the connection is

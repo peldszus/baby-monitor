@@ -46,7 +46,7 @@ function choose(path: string): void {
           <v-card-subtitle>Receives video and audio. Keep it with you.</v-card-subtitle>
         </v-card-item>
         <v-card-actions>
-          <v-btn block variant="tonal" data-testid="role-parent" @click="choose('/parent')">
+          <v-btn block color="primary" data-testid="role-parent" @click="choose('/parent')">
             Use as parent device
           </v-btn>
         </v-card-actions>

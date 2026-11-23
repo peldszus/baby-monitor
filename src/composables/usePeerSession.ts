@@ -4,10 +4,24 @@ import {
   createNegotiate,
   createPing,
   createPong,
+  createSetAudio,
+  createSetVideo,
+  createStatus,
   decodeControlMessage,
   encodeControlMessage,
+  type ControlMessage,
+  type SetAudioMessage,
+  type SetVideoMessage,
+  type StatusMessage,
 } from '@/core/control'
-import { openChildMedia, stopStream } from '@/core/media-child'
+import { ChildMediaController, stopStream } from '@/core/media-child'
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_VIDEO_SETTINGS,
+  type AudioSettings,
+  type VideoSettings,
+} from '@/core/media-settings'
+import type { MediaStatus } from '@/core/media-stats'
 import type { NegotiationDescription } from '@/core/negotiation'
 import { PeerSession, type PeerRole } from '@/core/peer'
 import {
@@ -37,6 +51,26 @@ function messageForFailure(reason: SignalFailure): string {
   }
 }
 
+interface BatteryLike {
+  level: number
+  charging: boolean
+}
+
+async function readBattery(): Promise<{ battery: number | null; charging: boolean | null }> {
+  const getBattery = (navigator as Navigator & { getBattery?: () => Promise<BatteryLike> })
+    .getBattery
+  if (typeof getBattery !== 'function') return { battery: null, charging: null }
+  try {
+    const battery = await getBattery.call(navigator)
+    return {
+      battery: Math.min(100, Math.max(0, Math.round(battery.level * 100))),
+      charging: battery.charging,
+    }
+  } catch {
+    return { battery: null, charging: null }
+  }
+}
+
 function detectCapabilities(): string[] {
   const caps: string[] = []
   if ('wakeLock' in navigator) caps.push('wake-lock')
@@ -62,8 +96,18 @@ export function usePeerSession(role: PeerRole) {
   const rttMs = ref<number | null>(null)
   const peerState = ref<RTCPeerConnectionState>('new')
   const channelOpen = ref(false)
+  const videoSettings = ref<VideoSettings>({ ...DEFAULT_VIDEO_SETTINGS })
+  const audioSettings = ref<AudioSettings>({ ...DEFAULT_AUDIO_SETTINGS })
+  const volume = ref(1)
+  const mediaStatus = ref<MediaStatus | null>(null)
+  const batteryLevel = ref<number | null>(null)
+  const charging = ref<boolean | null>(null)
 
   let peer: PeerSession | null = null
+  let media: ChildMediaController | null = null
+  let statusTimer: ReturnType<typeof setInterval> | null = null
+  let pingTimer: ReturnType<typeof setInterval> | null = null
+  let statusInFlight = false
   let channel: RTCDataChannel | null = null
   let offerSdp = ''
   let answerSdp = ''
@@ -79,8 +123,30 @@ export function usePeerSession(role: PeerRole) {
     if (next) state.value = next
   }
 
+  function stopStatusLoop(): void {
+    if (statusTimer) clearInterval(statusTimer)
+    statusTimer = null
+  }
+
+  function stopPingLoop(): void {
+    if (pingTimer) clearInterval(pingTimer)
+    pingTimer = null
+  }
+
+  function startPingLoop(): void {
+    stopPingLoop()
+    void sendPing()
+    pingTimer = setInterval(() => {
+      void sendPing()
+    }, 2000)
+  }
+
   function cleanupPeer(): void {
     closedByUs = true
+    stopStatusLoop()
+    stopPingLoop()
+    media?.stop()
+    media = null
     if (peer) {
       peer.close()
       peer = null
@@ -93,6 +159,12 @@ export function usePeerSession(role: PeerRole) {
     localStream.value = null
     remoteStream.value = null
     peerState.value = 'new'
+    mediaStatus.value = null
+    batteryLevel.value = null
+    charging.value = null
+    videoSettings.value = { ...DEFAULT_VIDEO_SETTINGS }
+    audioSettings.value = { ...DEFAULT_AUDIO_SETTINGS }
+    volume.value = 1
   }
 
   function clearPairing(): void {
@@ -123,6 +195,121 @@ export function usePeerSession(role: PeerRole) {
     void refreshShortCode()
   }
 
+  function sendControl(message: ControlMessage): boolean {
+    if (!channel || channel.readyState !== 'open') return false
+    try {
+      channel.send(encodeControlMessage(message))
+      return true
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : 'Could not send the command.'
+      return false
+    }
+  }
+
+  function startStatusLoop(): void {
+    stopStatusLoop()
+    statusTimer = setInterval(() => {
+      void sendStatus()
+    }, 1000)
+  }
+
+  async function sendStatus(): Promise<void> {
+    if (role !== 'child' || !peer || !channel || channel.readyState !== 'open') return
+    if (statusInFlight) return
+    statusInFlight = true
+    const settings = media?.settings ?? {
+      video: videoSettings.value,
+      audio: audioSettings.value,
+    }
+    const size = media?.videoSize ?? { width: 0, height: 0 }
+    try {
+      const stats = await peer.getMediaStats({
+        videoEnabled: settings.video.enabled,
+        audioEnabled: settings.audio.enabled,
+        gain: settings.audio.gain,
+        noiseSuppression: settings.audio.noiseSuppression,
+        autoGainControl: settings.audio.autoGainControl,
+        fallbackWidth: size.width,
+        fallbackHeight: size.height,
+      })
+      mediaStatus.value = stats
+      const battery = await readBattery()
+      batteryLevel.value = battery.battery
+      charging.value = battery.charging
+      if (channel?.readyState !== 'open') return
+      channel.send(
+        encodeControlMessage(
+          createStatus({ battery: battery.battery, charging: battery.charging, ...stats })
+        )
+      )
+    } catch {
+      // The connection can close while stats are being read; the next tick stops.
+    } finally {
+      statusInFlight = false
+    }
+  }
+
+  async function applySetVideo(message: SetVideoMessage): Promise<void> {
+    if (!media || !peer) return
+    error.value = null
+    try {
+      const track = await media.setVideoEnabled(message.enabled)
+      await peer.replaceVideoTrack(track)
+      const settings: VideoSettings = {
+        enabled: message.enabled,
+        fps: message.fps,
+        scaleDownBy: message.scaleDownBy,
+        maxBitrate: message.maxBitrate,
+      }
+      await media.setVideoSettings(settings)
+      await peer.applyVideoParameters(settings)
+      videoSettings.value = settings
+      localStream.value = media.stream
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : 'Could not change the video.'
+    } finally {
+      await sendStatus()
+    }
+  }
+
+  async function applySetAudio(message: SetAudioMessage): Promise<void> {
+    if (!media || !peer) return
+    error.value = null
+    try {
+      const track = await media.setAudioEnabled(message.enabled)
+      await peer.replaceAudioTrack(track)
+      const settings: AudioSettings = {
+        enabled: message.enabled,
+        gain: message.gain,
+        noiseSuppression: message.noiseSuppression,
+        autoGainControl: message.autoGainControl,
+      }
+      await media.setAudioSettings(settings)
+      audioSettings.value = settings
+      localStream.value = media.stream
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : 'Could not change the audio.'
+    } finally {
+      await sendStatus()
+    }
+  }
+
+  function updateVideoSettings(partial: Partial<VideoSettings>): void {
+    if (role !== 'parent') return
+    videoSettings.value = { ...videoSettings.value, ...partial }
+    sendControl(createSetVideo(videoSettings.value))
+  }
+
+  function updateAudioSettings(partial: Partial<AudioSettings>): void {
+    if (role !== 'parent') return
+    audioSettings.value = { ...audioSettings.value, ...partial }
+    sendControl(createSetAudio(audioSettings.value))
+  }
+
+  function setVolume(value: number): void {
+    volume.value = Math.min(1, Math.max(0, value))
+  }
+
   async function handleControl(raw: unknown): Promise<void> {
     const result = decodeControlMessage(raw)
     if (!result.ok) return
@@ -136,6 +323,34 @@ export function usePeerSession(role: PeerRole) {
     }
     if (message.type === 'pong') {
       rttMs.value = Math.max(0, Math.round(performance.now() - message.t))
+      return
+    }
+    if (message.type === 'set-video') {
+      if (role === 'child') await applySetVideo(message)
+      return
+    }
+    if (message.type === 'set-audio') {
+      if (role === 'child') await applySetAudio(message)
+      return
+    }
+    if (message.type === 'status') {
+      if (role === 'parent') {
+        const status: StatusMessage = message
+        mediaStatus.value = {
+          fps: status.fps,
+          width: status.width,
+          height: status.height,
+          bitrate: status.bitrate,
+          audioLevel: status.audioLevel,
+          gain: status.gain,
+          videoEnabled: status.videoEnabled,
+          audioEnabled: status.audioEnabled,
+          noiseSuppression: status.noiseSuppression,
+          autoGainControl: status.autoGainControl,
+        }
+        batteryLevel.value = status.battery
+        charging.value = status.charging
+      }
       return
     }
     if (message.type === 'negotiate') {
@@ -159,14 +374,20 @@ export function usePeerSession(role: PeerRole) {
     mediaStarted = true
     pairingProgress.value = 'Starting camera and microphone…'
     try {
-      const stream = await openChildMedia()
+      media = new ChildMediaController()
+      const stream = await media.start()
       if (closedByUs || !peer) {
-        stopStream(stream)
+        media.stop()
+        media = null
         return
       }
       localStream.value = stream
+      videoSettings.value = { ...media.settings.video }
+      audioSettings.value = { ...media.settings.audio }
       pairingProgress.value = 'Connecting media…'
       peer.startMedia(stream)
+      startStatusLoop()
+      void sendStatus()
     } catch (cause) {
       fail(cause, 'Could not start the camera and microphone.')
     }
@@ -187,12 +408,14 @@ export function usePeerSession(role: PeerRole) {
         fail(cause, 'Could not send the control handshake.')
         return
       }
+      startPingLoop()
       void onChannelReady()
     }
 
     nextChannel.onopen = announce
     nextChannel.onclose = () => {
       channelOpen.value = false
+      stopPingLoop()
     }
     nextChannel.onmessage = (event) => {
       void handleControl(event.data)
@@ -395,10 +618,18 @@ export function usePeerSession(role: PeerRole) {
     rttMs,
     peerState,
     channelOpen,
+    videoSettings,
+    audioSettings,
+    volume,
+    mediaStatus,
+    batteryLevel,
+    charging,
     startChild,
     acceptOffer,
     acceptAnswer,
-    sendPing,
+    updateVideoSettings,
+    updateAudioSettings,
+    setVolume,
     reset,
   }
 }
