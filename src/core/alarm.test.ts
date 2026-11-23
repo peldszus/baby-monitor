@@ -46,12 +46,13 @@ afterEach(() => {
 })
 
 describe('web audio alarm', () => {
-  it('unlocks audio and plays a short tone', async () => {
+  it('unlocks audio without playing a tone', async () => {
     const context = new FakeContext()
     const alarm = new WebAudioAlarm(() => context)
     expect(await alarm.unlock()).toBe(true)
     expect(context.resume).toHaveBeenCalled()
-    expect(context.oscillators).toHaveLength(1)
+    expect(context.createOscillator).not.toHaveBeenCalled()
+    expect(context.oscillators).toHaveLength(0)
   })
 
   it('pulses while active and stops cleanly', () => {

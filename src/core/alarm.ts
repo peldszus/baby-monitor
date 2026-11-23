@@ -40,7 +40,7 @@ function resolveAudioContext(): (() => AlarmContext) | null {
 
 /**
  * Small Web Audio warning tone. Browsers require a user gesture before audio can
- * play, so callers unlock it when monitoring starts, then start it on failure.
+ * play, so callers unlock the context silently, then start the tone on failure.
  */
 export class WebAudioAlarm {
   private context: AlarmContext | null = null
@@ -58,7 +58,6 @@ export class WebAudioAlarm {
     if (!context) return false
     try {
       if (context.state === 'suspended') await context.resume()
-      this.beep(660, 0.12, 0.05)
       return true
     } catch {
       return false

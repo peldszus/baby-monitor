@@ -122,7 +122,8 @@ that directory.
 - M3 operation: `HeartbeatMonitor` starts only when media is connected, so pairing delay cannot
   raise a false alarm. The parent raises `alarmActive` after six seconds without a pong or on a
   WebRTC failure while connected/degraded. `WebAudioAlarm` unlocks on the first parent pointer
-  event and again when monitoring starts; the visual warning stays until recovery or stop.
+  event and again when monitoring starts; unlocking resumes the audio context silently and
+  never plays a test tone. The visual warning stays until recovery or stop.
 - `ScreenWakeLock` requests `screen` while visible and re-requests it after `visibilitychange`.
   The status row reports whether the lock is active or unavailable. Session cleanup preserves the
   parent lock while `alarmActive` is true; stopping monitoring or leaving the view releases it.
