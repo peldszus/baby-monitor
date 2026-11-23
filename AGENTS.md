@@ -124,7 +124,8 @@ that directory.
   WebRTC failure while connected/degraded. `WebAudioAlarm` unlocks on the first parent pointer
   event and again when monitoring starts; the visual warning stays until recovery or stop.
 - `ScreenWakeLock` requests `screen` while visible and re-requests it after `visibilitychange`.
-  The status row reports whether the lock is active or unavailable.
+  The status row reports whether the lock is active or unavailable. Session cleanup preserves the
+  parent lock while `alarmActive` is true; stopping monitoring or leaving the view releases it.
 - The parent sends `set-screen {dark}`; the child shows a black fixed overlay, tries
   `requestFullscreen`, and reports `screenDark` in every status. Double-tap or long-press wakes the
   child locally. `exitAppFullscreen` and the overlay are best effort where fullscreen is blocked.

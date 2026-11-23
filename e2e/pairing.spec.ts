@@ -174,6 +174,27 @@ test.describe('pairing', () => {
     const childContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
     const parentContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
 
+    await parentContext.addInitScript(() => {
+      const sentinel = {
+        released: false,
+        addEventListener: () => undefined,
+        release: async () => {
+          sentinel.released = true
+          ;(window as unknown as { __wakeLockReleased?: boolean }).__wakeLockReleased = true
+        },
+      }
+      Object.defineProperty(navigator, 'wakeLock', {
+        configurable: true,
+        value: {
+          request: async () => {
+            const state = window as unknown as { __wakeLockRequests?: number }
+            state.__wakeLockRequests = (state.__wakeLockRequests ?? 0) + 1
+            return sentinel
+          },
+        },
+      })
+    })
+
     try {
       const child = await childContext.newPage()
       const parent = await parentContext.newPage()
@@ -207,10 +228,29 @@ test.describe('pairing', () => {
       await childContext.close()
 
       await expect(parent.getByTestId('alarm-overlay')).toBeVisible({ timeout: 15_000 })
+      expect(
+        await parent.evaluate(
+          () => (window as unknown as { __wakeLockRequests?: number }).__wakeLockRequests ?? 0
+        )
+      ).toBeGreaterThan(0)
+      expect(
+        await parent.evaluate(
+          () => (window as unknown as { __wakeLockReleased?: boolean }).__wakeLockReleased ?? false
+        )
+      ).toBe(false)
+
       await parent.getByTestId('alarm-silence').click()
       await expect(parent.getByTestId('alarm-muted')).toBeVisible()
       await parent.getByTestId('alarm-stop').click()
       await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
+      await expect
+        .poll(() =>
+          parent.evaluate(
+            () =>
+              (window as unknown as { __wakeLockReleased?: boolean }).__wakeLockReleased ?? false
+          )
+        )
+        .toBe(true)
     } finally {
       await childContext.close()
       await parentContext.close()

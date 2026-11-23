@@ -48,7 +48,8 @@ isolation.
 ## Long-running operation
 
 - Both devices request a screen Wake Lock while monitoring and re-request it when the page becomes
-  visible again. If the browser does not support it, the status row says so.
+  visible again. If the browser does not support it, the status row says so. The parent keeps the
+  lock while the connection-lost alarm is visible, so the warning stays on screen.
 - The parent can switch the child display to a black fullscreen surface. On OLED screens this
   saves power and keeps the room dark. Double-tap the child screen, or press and hold it, to wake
   it locally.

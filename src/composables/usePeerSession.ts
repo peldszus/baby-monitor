@@ -190,6 +190,7 @@ export function usePeerSession(role: PeerRole) {
     if (state.value !== 'connected' && state.value !== 'degraded') return
     alarmActive.value = true
     alarmMuted.value = false
+    void wakeLock.acquire()
     alarm?.start()
   }
 
@@ -245,7 +246,7 @@ export function usePeerSession(role: PeerRole) {
     stopPingLoop()
     stopHeartbeat()
     stopReconnect()
-    void wakeLock.release()
+    if (!(role === 'parent' && alarmActive.value)) void wakeLock.release()
     if (screenDark.value) {
       screenDark.value = false
       void exitAppFullscreen()
@@ -655,6 +656,7 @@ export function usePeerSession(role: PeerRole) {
       return false
     }
     clearAlarm()
+    void wakeLock.release()
     error.value = null
 
     const collected = offerCollector.addMany(text)
