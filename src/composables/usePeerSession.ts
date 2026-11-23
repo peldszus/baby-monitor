@@ -84,6 +84,7 @@ function detectCapabilities(): string[] {
   if (typeof HTMLCanvasElement !== 'undefined' && 'captureStream' in HTMLCanvasElement.prototype) {
     caps.push('canvas-capture-stream')
   }
+  if ('MediaStreamTrackProcessor' in globalThis) caps.push('media-stream-track-processor')
   if (typeof RTCRtpSender !== 'undefined' && 'setParameters' in RTCRtpSender.prototype) {
     caps.push('rtp-parameters')
   }

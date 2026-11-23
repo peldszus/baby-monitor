@@ -69,6 +69,17 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('send-ping')).toHaveCount(0)
       await expect(child.getByTestId('send-ping')).toHaveCount(0)
 
+      await parent.evaluate(() => {
+        const state = { draws: 0 }
+        Object.defineProperty(window, '__canvasDraws', { value: state, configurable: true })
+        const proto = CanvasRenderingContext2D.prototype
+        const original = proto.drawImage
+        proto.drawImage = function (this: CanvasRenderingContext2D, ...args: unknown[]) {
+          state.draws += 1
+          return original.apply(this, args as never)
+        }
+      })
+
       const remoteVideo = parent.getByTestId('remote-video')
       await expect
         .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).videoWidth), {
@@ -177,6 +188,32 @@ test.describe('pairing', () => {
       await expect(stage).toHaveAttribute('data-pip', 'none')
       await parent.getByTestId('pip-button').click()
       await expect(stage).toHaveAttribute('data-pip', 'canvas', { timeout: 15_000 })
+
+      const drawsBefore = await parent.evaluate(
+        () => (window as unknown as { __canvasDraws: { draws: number } }).__canvasDraws.draws
+      )
+      await parent.evaluate(() => {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          get: () => 'hidden',
+        })
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await expect
+        .poll(
+          () =>
+            parent.evaluate(
+              () => (window as unknown as { __canvasDraws: { draws: number } }).__canvasDraws.draws
+            ),
+          { timeout: 10_000 }
+        )
+        .toBeGreaterThan(drawsBefore + 2)
+      await parent.evaluate(() => {
+        delete (document as unknown as { visibilityState?: string }).visibilityState
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await expect(stage).toHaveAttribute('data-pip', 'canvas')
+
       await parent.getByTestId('pip-button').click()
       await expect(stage).toHaveAttribute('data-pip', 'none')
 

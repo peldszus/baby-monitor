@@ -146,6 +146,12 @@ that directory.
   `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
   on a hidden video. Switching between identity and transformed views closes PiP; the user starts
   it again. Canvas PiP draws a connection warning into the frame while degraded.
+- Hidden-page canvas PiP must not rely on `requestAnimationFrame`: browsers pause it. While the
+  page is hidden and canvas PiP is active, `PresentationVideo` reads remote video frames through
+  `MediaStreamTrackProcessor` and draws them, with a 15 fps timer and `requestVideoFrameCallback`
+  fallback. The source video also stays full-size behind the canvas so the browser does not treat
+  it as a tiny hidden element. This prevents the Android PiP window from freezing when the app
+  goes to the home screen.
 - Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
   resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.

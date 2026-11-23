@@ -20,6 +20,18 @@ import {
   type PresentationState,
 } from '@/core/presentation'
 
+interface VideoFrameSource {
+  displayWidth: number
+  displayHeight: number
+  close(): void
+}
+
+interface TrackProcessorCtor {
+  new (init: { track: MediaStreamTrack }): {
+    readable: ReadableStream<VideoFrameSource>
+  }
+}
+
 const props = defineProps<{
   stream: MediaStream | null
   muted?: boolean
@@ -44,7 +56,11 @@ const transformed = computed(() => isTransformed(presentation.value))
 const zoomLabel = computed(() => `${presentation.value.zoom.toFixed(1)}×`)
 
 let drawFrameId: number | null = null
+let drawTimer: ReturnType<typeof setInterval> | null = null
+let videoFrameId: number | null = null
 let canvasStream: MediaStream | null = null
+let frameReader: ReadableStreamDefaultReader<VideoFrameSource> | null = null
+let readingFrames = false
 let unmounted = false
 let pointerStart: { x: number; y: number; panX: number; panY: number } | null = null
 let pinchStart: { distance: number; zoom: number } | null = null
@@ -106,41 +122,108 @@ function drawWarning(ctx: CanvasRenderingContext2D, width: number): void {
   ctx.textBaseline = 'alphabetic'
 }
 
-function drawFrame(): void {
+function drawFrameWith(
+  source: HTMLVideoElement | VideoFrameSource | null,
+  width: number,
+  height: number
+): void {
   const element = canvas.value
-  const source = video.value
-  if (!element || !source || videoSize.value.width === 0) return
+  if (!element) return
   resizeCanvas()
   const ctx = element.getContext('2d')
   if (!ctx) return
-  const { width, height } = element
+  const canvasWidth = element.width
+  const canvasHeight = element.height
   ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, width, height)
-  if (source.readyState >= 2) {
-    const panX = panPixels(presentation.value.panX, presentation.value.zoom, width)
-    const panY = panPixels(presentation.value.panY, presentation.value.zoom, height)
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+  if (source && width > 0 && height > 0) {
+    const panX = panPixels(presentation.value.panX, presentation.value.zoom, canvasWidth)
+    const panY = panPixels(presentation.value.panY, presentation.value.zoom, canvasHeight)
     ctx.save()
-    ctx.translate(width / 2 + panX, height / 2 + panY)
+    ctx.translate(canvasWidth / 2 + panX, canvasHeight / 2 + panY)
     ctx.rotate((presentation.value.rotation * Math.PI) / 180)
     ctx.scale(presentation.value.zoom, presentation.value.zoom)
-    ctx.drawImage(
-      source,
-      -videoSize.value.width / 2,
-      -videoSize.value.height / 2,
-      videoSize.value.width,
-      videoSize.value.height
-    )
+    ctx.drawImage(source as unknown as HTMLVideoElement, -width / 2, -height / 2, width, height)
     ctx.restore()
   }
-  if (props.warning) drawWarning(ctx, width)
+  if (props.warning) drawWarning(ctx, canvasWidth)
+}
+
+function drawFrame(): void {
+  const source = video.value
+  if (!source || videoSize.value.width === 0) return
+  drawFrameWith(
+    source.readyState >= 2 ? source : null,
+    videoSize.value.width,
+    videoSize.value.height
+  )
+}
+
+function drawVideoFrame(frame: VideoFrameSource): void {
+  if (
+    videoSize.value.width !== frame.displayWidth ||
+    videoSize.value.height !== frame.displayHeight
+  ) {
+    videoSize.value = { width: frame.displayWidth, height: frame.displayHeight }
+  }
+  drawFrameWith(frame, frame.displayWidth, frame.displayHeight)
+}
+
+function stopFrameReader(): void {
+  readingFrames = false
+  const reader = frameReader
+  frameReader = null
+  if (reader) void reader.cancel().catch(() => undefined)
+}
+
+function startFrameReader(): void {
+  if (readingFrames) return
+  const track = props.stream?.getVideoTracks()[0]
+  const ctor = (globalThis as { MediaStreamTrackProcessor?: TrackProcessorCtor })
+    .MediaStreamTrackProcessor
+  if (!track || !ctor) return
+  try {
+    const processor = new ctor({ track })
+    const reader = processor.readable.getReader()
+    frameReader = reader
+    readingFrames = true
+    void (async () => {
+      try {
+        while (readingFrames) {
+          const { value, done } = await reader.read()
+          if (done) break
+          if (!value) continue
+          drawVideoFrame(value)
+          value.close()
+        }
+      } catch {
+        // The track ended or the processor was cancelled.
+      } finally {
+        if (frameReader === reader) {
+          readingFrames = false
+          frameReader = null
+        }
+      }
+    })()
+  } catch {
+    readingFrames = false
+    frameReader = null
+  }
 }
 
 function stopDrawLoop(): void {
   if (drawFrameId !== null) cancelAnimationFrame(drawFrameId)
+  if (drawTimer !== null) clearInterval(drawTimer)
+  if (videoFrameId !== null && video.value) {
+    video.value.cancelVideoFrameCallback(videoFrameId)
+  }
+  stopFrameReader()
   drawFrameId = null
+  drawTimer = null
+  videoFrameId = null
 }
 
-function startDrawLoop(): void {
+function startRafLoop(): void {
   if (unmounted || drawFrameId !== null) return
   let lastDraw = 0
   const loop = (time: number): void => {
@@ -154,15 +237,55 @@ function startDrawLoop(): void {
   drawFrameId = requestAnimationFrame(loop)
 }
 
+function startHiddenLoop(): void {
+  if (unmounted || drawTimer !== null) return
+  drawFrame()
+  drawTimer = setInterval(drawFrame, 1000 / 15)
+  startFrameReader()
+  const source = video.value
+  if (source && typeof source.requestVideoFrameCallback === 'function') {
+    const onFrame = (): void => {
+      if (unmounted || drawTimer === null) return
+      drawFrame()
+      videoFrameId = source.requestVideoFrameCallback(onFrame)
+    }
+    videoFrameId = source.requestVideoFrameCallback(onFrame)
+  }
+}
+
 function syncDrawLoop(): void {
   if (unmounted) return
-  if (transformed.value) startDrawLoop()
-  else {
+  if (!transformed.value) {
     stopDrawLoop()
     const element = canvas.value
     const ctx = element?.getContext('2d')
     if (element && ctx) ctx.clearRect(0, 0, element.width, element.height)
+    return
   }
+  const canvasPipActive = pipMode.value === 'canvas' && pipActive.value
+  if (document.visibilityState === 'hidden' && !canvasPipActive) {
+    stopDrawLoop()
+    return
+  }
+  if (document.visibilityState === 'hidden') {
+    if (drawTimer === null) {
+      stopDrawLoop()
+      startHiddenLoop()
+    }
+  } else if (drawFrameId === null) {
+    stopDrawLoop()
+    startRafLoop()
+  }
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') {
+    void video.value?.play().catch(() => undefined)
+  } else if (pipMode.value === 'canvas' && pipActive.value) {
+    void video.value?.play().catch(() => undefined)
+    void pipVideo.value?.play().catch(() => undefined)
+  }
+  syncDrawLoop()
 }
 
 function attach(): void {
@@ -310,6 +433,7 @@ async function startCanvasPip(): Promise<void> {
   await pip.play()
   await pip.requestPictureInPicture()
   pipActive.value = true
+  syncDrawLoop()
 }
 
 async function startPip(): Promise<void> {
@@ -381,6 +505,7 @@ onMounted(() => {
   element?.addEventListener('enterpictureinpicture', onEnterStandardPip)
   element?.addEventListener('leavepictureinpicture', onLeaveStandardPip)
   pipVideo.value?.addEventListener('leavepictureinpicture', stopCanvasPip)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   attach()
 })
 
@@ -392,6 +517,7 @@ onBeforeUnmount(() => {
   video.value?.removeEventListener('enterpictureinpicture', onEnterStandardPip)
   video.value?.removeEventListener('leavepictureinpicture', onLeaveStandardPip)
   pipVideo.value?.removeEventListener('leavepictureinpicture', stopCanvasPip)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
@@ -415,7 +541,7 @@ onBeforeUnmount(() => {
       <video
         ref="video"
         class="video"
-        :class="{ hidden: transformed }"
+        :class="{ behind: transformed }"
         autoplay
         playsinline
         :muted="muted"
@@ -521,15 +647,20 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
-.video.hidden {
+.video.behind {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
   pointer-events: none;
 }
 
 .canvas {
+  position: relative;
+  z-index: 1;
+  background: #000;
   touch-action: none;
 }
 

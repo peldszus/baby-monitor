@@ -58,6 +58,12 @@ audio track is attached, and that stream is shown in PiP. Transform changes whil
 active close PiP so the new view can be started again. PiP support and behavior vary by browser;
 the button is disabled with a short explanation when the API is unavailable.
 
+When the parent app goes to the background, the canvas keeps drawing from the remote video track
+instead of relying only on `requestAnimationFrame`, which browsers pause for hidden pages. A
+`MediaStreamTrackProcessor` drives the frames where available, with a timer and
+`requestVideoFrameCallback` fallback. This keeps the transformed PiP window live when you return to
+the home screen.
+
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation.
 
