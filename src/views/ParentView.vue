@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { mdiCellphone, mdiQrcodeScan } from '@mdi/js'
+import AlarmOverlay from '@/components/AlarmOverlay.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import PairingSteps from '@/components/PairingSteps.vue'
 import QrScanner from '@/components/QrScanner.vue'
@@ -27,10 +28,18 @@ const {
   mediaStatus,
   batteryLevel,
   charging,
+  screenDark,
+  alarmActive,
+  alarmMuted,
+  reconnecting,
+  wakeLockActive,
+  wakeLockSupported,
   acceptOffer,
   updateVideoSettings,
   updateAudioSettings,
   setVolume,
+  setScreenDark,
+  silenceAlarm,
   reset,
 } = usePeerSession('parent')
 
@@ -65,6 +74,8 @@ const batteryLine = computed(() => {
   return `${batteryLevel.value}%${charging.value ? ' charging' : ''}`
 })
 
+const screenLine = computed(() => (screenDark.value ? 'Child screen dark' : 'Child screen on'))
+
 function formatBitrate(bitsPerSecond: number): string {
   if (bitsPerSecond >= 1_000_000) return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`
   return `${Math.round(bitsPerSecond / 1000)} kbps`
@@ -76,6 +87,10 @@ function setVideoEnabled(value: boolean | null): void {
 
 function setAudioEnabled(value: boolean | null): void {
   if (typeof value === 'boolean') updateAudioSettings({ enabled: value })
+}
+
+function setScreenDarkValue(value: boolean | null): void {
+  if (typeof value === 'boolean') setScreenDark(value)
 }
 
 function setFps(value: unknown): void {
@@ -185,7 +200,14 @@ function startOver(): void {
     </section>
 
     <template v-else-if="monitoring">
-      <ConnectionStatus :state="state" :peer-state="peerState" :rtt-ms="rttMs" />
+      <ConnectionStatus
+        :state="state"
+        :peer-state="peerState"
+        :rtt-ms="rttMs"
+        :reconnecting="reconnecting"
+        :wake-lock-active="wakeLockActive"
+        :wake-lock-supported="wakeLockSupported"
+      />
       <VideoStream
         :stream="remoteStream"
         :volume="volume"
@@ -200,6 +222,7 @@ function startOver(): void {
         </div>
         <p data-testid="media-status">{{ statusLine }}</p>
         <p data-testid="audio-status">{{ audioLine }}</p>
+        <p data-testid="screen-status">{{ screenLine }}</p>
       </section>
 
       <section class="panel controls-panel">
@@ -237,6 +260,15 @@ function startOver(): void {
           data-testid="auto-gain-toggle"
           @update:model-value="setAutoGainControl"
         />
+        <v-switch
+          :model-value="screenDark"
+          label="Child screen dark"
+          color="primary"
+          hide-details
+          data-testid="screen-dark-toggle"
+          @update:model-value="setScreenDarkValue"
+        />
+        <p class="progress">The child can double-tap its screen to wake it.</p>
 
         <div class="control-row">
           <span>Frame rate</span>
@@ -349,6 +381,13 @@ function startOver(): void {
     <p class="disclaimer">This app is not a medical device and does not replace supervision.</p>
 
     <QrScanner v-model="scannerOpen" :progress="pairingProgress" @decoded="onScanned" />
+    <AlarmOverlay
+      :active="alarmActive"
+      :muted="alarmMuted"
+      :reconnecting="reconnecting"
+      @silence="silenceAlarm"
+      @stop="startOver"
+    />
   </div>
 </template>
 

@@ -92,6 +92,12 @@ export class PeerSession {
     await this.connection.setRemoteDescription({ type: 'answer', sdp: answerSdp })
   }
 
+  restartIce(): void {
+    if (this.connection.connectionState === 'closed') return
+    if (typeof this.connection.restartIce !== 'function') return
+    this.connection.restartIce()
+  }
+
   startMedia(stream: MediaStream): void {
     for (const track of stream.getTracks()) {
       const sender = this.connection.addTrack(track, stream)

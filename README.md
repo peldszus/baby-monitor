@@ -3,12 +3,16 @@
 A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR code, then send
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
-The current build covers Milestones 0, 1 and 2 from the
+The current build covers Milestones 0, 1, 2 and 3 from the
 [concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
-media negotiated over that encrypted channel, and parent controls for video, audio, frame rate,
-resolution, bitrate, microphone gain, noise suppression, automatic gain and volume. The child
-reports the values that actually took effect. Both devices exchange an automatic RTT ping every
-two seconds. Wake locks, heartbeat alarms and presentation features are still to come.
+media negotiated over that encrypted channel, parent controls for video, audio, frame rate,
+resolution, bitrate, microphone gain, noise suppression, automatic gain and volume, and operation
+features for long-running use. The child reports the values that actually took effect. Both
+devices exchange an automatic RTT ping every two seconds.
+
+M3 adds a screen Wake Lock, a black fullscreen child display that the parent can switch on, a loud
+parent alarm after six seconds without a heartbeat, and automatic ICE restart attempts while the
+data channel still works. Presentation features (rotation, pan/zoom, PiP) are still to come.
 
 ## Pairing
 
@@ -39,8 +43,22 @@ effective control. Each device pings the other every two seconds and shows the l
 time next to the connection state.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
-isolation. There is no reconnection after a network change yet; pair again if the connection is
-lost.
+isolation.
+
+## Long-running operation
+
+- Both devices request a screen Wake Lock while monitoring and re-request it when the page becomes
+  visible again. If the browser does not support it, the status row says so. The parent keeps the
+  lock while the connection-lost alarm is visible, so the warning stays on screen.
+- The parent can switch the child display to a black fullscreen surface. On OLED screens this
+  saves power and keeps the room dark. Double-tap the child screen, or press and hold it, to wake
+  it locally.
+- The parent unlocks a Web Audio warning tone with the first tap. If six seconds pass without a
+  heartbeat response, or WebRTC reports a failure, a fullscreen warning appears and the tone
+  sounds. You can silence the tone while the warning stays visible, or stop monitoring.
+- On a short network interruption, both sides try an ICE restart over the existing data channel.
+  This cannot repair a changed network or a closed data channel; when it fails, the app says so and
+  asks for a new pairing.
 
 ## Live environments
 

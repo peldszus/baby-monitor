@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import PairingSteps from '@/components/PairingSteps.vue'
@@ -23,8 +23,12 @@ const {
   mediaStatus,
   batteryLevel,
   charging,
+  screenDark,
+  wakeLockActive,
+  wakeLockSupported,
   startChild,
   acceptAnswer,
+  wakeScreen,
   reset,
 } = usePeerSession('child')
 
@@ -85,10 +89,40 @@ function startOver(): void {
   pasteText.value = ''
   reset()
 }
+
+let wakePressTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelWakePress(): void {
+  if (wakePressTimer) clearTimeout(wakePressTimer)
+  wakePressTimer = null
+}
+
+function startWakePress(): void {
+  cancelWakePress()
+  wakePressTimer = setTimeout(() => {
+    wakePressTimer = null
+    void wakeScreen()
+  }, 800)
+}
+
+onBeforeUnmount(cancelWakePress)
 </script>
 
 <template>
   <div class="view" :class="{ pairing: !monitoring }">
+    <div
+      v-if="screenDark"
+      class="dark-screen"
+      data-testid="dark-screen"
+      @dblclick="wakeScreen"
+      @pointerdown="startWakePress"
+      @pointerup="cancelWakePress"
+      @pointercancel="cancelWakePress"
+      @pointerleave="cancelWakePress"
+    >
+      <span class="dark-hint">Double-tap to wake</span>
+    </div>
+
     <v-alert v-if="error" type="error" variant="tonal" data-testid="error">{{ error }}</v-alert>
 
     <PairingSteps v-if="!monitoring" :current="pairingStep" />
@@ -158,7 +192,13 @@ function startOver(): void {
     </section>
 
     <template v-else-if="monitoring">
-      <ConnectionStatus :state="state" :peer-state="peerState" :rtt-ms="rttMs" />
+      <ConnectionStatus
+        :state="state"
+        :peer-state="peerState"
+        :rtt-ms="rttMs"
+        :wake-lock-active="wakeLockActive"
+        :wake-lock-supported="wakeLockSupported"
+      />
       <VideoStream :stream="localStream" muted test-id="local-video" />
       <section class="panel status-panel">
         <div class="status-heading">
@@ -195,6 +235,25 @@ function startOver(): void {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.dark-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  background: #000;
+  touch-action: manipulation;
+}
+
+.dark-hint {
+  color: #444;
+  font-size: 0.8rem;
+  opacity: 0.45;
+  user-select: none;
 }
 
 .view.pairing {
