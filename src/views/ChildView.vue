@@ -33,6 +33,7 @@ const {
 } = usePeerSession('child')
 
 const scannerOpen = ref(false)
+const answerMode = ref(false)
 const pasteText = ref('')
 const offerText = computed(() => offerChunks.value.join('\n'))
 const offerReady = computed(() => offerChunks.value.length > 0)
@@ -69,15 +70,27 @@ function formatBitrate(bitsPerSecond: number): string {
 }
 
 async function start(): Promise<void> {
+  answerMode.value = false
   await startChild()
 }
 
+function enterAnswerMode(): void {
+  answerMode.value = true
+}
+
+function beginAnswerScan(): void {
+  enterAnswerMode()
+  scannerOpen.value = true
+}
+
 async function submitAnswer(): Promise<void> {
+  enterAnswerMode()
   const accepted = await acceptAnswer(pasteText.value)
   if (accepted) pasteText.value = ''
 }
 
 async function onScanned(text: string): Promise<void> {
+  enterAnswerMode()
   scannerOpen.value = false
   await nextTick()
   const accepted = await acceptAnswer(text)
@@ -86,6 +99,7 @@ async function onScanned(text: string): Promise<void> {
 
 function startOver(): void {
   scannerOpen.value = false
+  answerMode.value = false
   pasteText.value = ''
   reset()
 }
@@ -145,28 +159,42 @@ onBeforeUnmount(cancelWakePress)
 
     <section v-else-if="state === 'pairing' && !channelOpen" class="panel pairing-panel">
       <div class="panel-heading">
-        <h2>Show this code to the parent</h2>
+        <h2>{{ answerMode ? "Scan the parent's answer" : 'Show this code to the parent' }}</h2>
         <v-btn variant="text" size="small" class="heading-action" @click="startOver">
           Start over
         </v-btn>
       </div>
-      <SignalQr :chunks="offerChunks" label="Child pairing code" :expires-at="offerExpiresAt" />
+      <template v-if="!answerMode">
+        <SignalQr :chunks="offerChunks" label="Child pairing code" :expires-at="offerExpiresAt" />
+        <TextCodePanel
+          title="Show text code instead"
+          label="Child pairing code"
+          :model-value="offerText"
+          test-id="offer-text"
+          readonly
+        />
+      </template>
+      <p v-else class="progress" data-testid="answer-mode">
+        The parent has the child code. Scan or enter the answer to finish.
+      </p>
       <v-btn
         color="primary"
         block
         :prepend-icon="mdiQrcodeScan"
         data-testid="scan-answer"
-        @click="scannerOpen = true"
+        @click="beginAnswerScan"
       >
         Scan parent's answer
       </v-btn>
-      <TextCodePanel
-        title="Show text code instead"
-        label="Child pairing code"
-        :model-value="offerText"
-        test-id="offer-text"
-        readonly
-      />
+      <v-btn
+        v-if="answerMode"
+        variant="text"
+        size="small"
+        data-testid="show-child-code"
+        @click="answerMode = false"
+      >
+        Show child code again
+      </v-btn>
       <TextCodePanel
         v-model="pasteText"
         title="Enter answer manually"
@@ -175,6 +203,7 @@ onBeforeUnmount(cancelWakePress)
         action-label="Finish pairing"
         action-test-id="submit-answer"
         :action-disabled="!pasteText.trim()"
+        @open="enterAnswerMode"
         @action="submitAnswer"
       />
     </section>

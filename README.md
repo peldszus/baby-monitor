@@ -20,9 +20,11 @@ data channel still works. Presentation features (rotation, pan/zoom, PiP) are st
    code**. The child shows a QR code. The camera does not start yet.
 2. Open the app on the parent device and choose **Parent device**, then tap **Scan child's code**.
    The parent shows an answer QR code.
-3. On the child, tap **Scan parent's answer** and scan that code. Both devices show a connecting
-   spinner while the data channel opens. The child then starts its rear/main camera and negotiates
-   audio and video; both sides show the live stream.
+3. On the child, tap **Scan parent's answer** and scan that code. Opening the answer step hides
+   the child code, because the child cannot detect when the parent has scanned it; **Show child
+   code again** restores it if needed. Both devices show a connecting spinner while the data
+   channel opens. The child then starts its rear/main camera and negotiates audio and video; both
+   sides show the live stream.
 
 A three-node indicator marks the child code, parent code and connection steps. Text codes are
 available under a collapsible fallback in each step, and the pairing screens are sized to avoid
