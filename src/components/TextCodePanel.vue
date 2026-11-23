@@ -14,12 +14,17 @@ defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   action: []
+  open: []
 }>()
+
+function onSelected(value: { value: boolean }): void {
+  if (value.value) emit('open')
+}
 </script>
 
 <template>
   <v-expansion-panels variant="accordion" flat class="text-code">
-    <v-expansion-panel>
+    <v-expansion-panel @group:selected="onSelected">
       <v-expansion-panel-title class="text-code-title">{{ title }}</v-expansion-panel-title>
       <v-expansion-panel-text>
         <v-textarea

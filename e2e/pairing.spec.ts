@@ -52,6 +52,9 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('qr-code')).toBeVisible()
 
       await child.getByText('Enter answer manually').click()
+      await expect(child.getByTestId('qr-code')).toHaveCount(0)
+      await expect(child.getByTestId('answer-mode')).toBeVisible()
+      await expect(child.getByTestId('show-child-code')).toBeVisible()
       await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
       await child.getByTestId('submit-answer').click()
 
@@ -216,6 +219,9 @@ test.describe('pairing', () => {
       const answer = await answerBox.inputValue()
 
       await child.getByText('Enter answer manually').click()
+      await expect(child.getByTestId('qr-code')).toHaveCount(0)
+      await expect(child.getByTestId('answer-mode')).toBeVisible()
+      await expect(child.getByTestId('show-child-code')).toBeVisible()
       await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
       await child.getByTestId('submit-answer').click()
 

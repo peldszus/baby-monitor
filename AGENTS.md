@@ -116,9 +116,11 @@ that directory.
 - Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
 - Pairing uses one shared three-step indicator on both devices: child code, parent code and
   connect. The child shows the offer then scans the answer; the parent scans the offer then shows
-  the answer. Text codes live in collapsed expansion panels so the QR flow stays above the fold.
-  Pairing views use compact spacing and a viewport-height QR size; E2E checks 320×568, 360×640 and
-  390×844 without page scrolling.
+  the answer. The QR exchange is one-way, so the child cannot know when the parent scanned its
+  offer. Opening the answer scanner or manual answer panel hides the consumed child code, with a
+  **Show child code again** link. Text codes live in collapsed expansion panels so the QR flow
+  stays above the fold. Pairing views use compact spacing and a viewport-height QR size; E2E checks
+  320×568, 360×640 and 390×844 without page scrolling.
 - M3 operation: `HeartbeatMonitor` starts only when media is connected, so pairing delay cannot
   raise a false alarm. The parent raises `alarmActive` after six seconds without a pong or on a
   WebRTC failure while connected/degraded. `WebAudioAlarm` unlocks on the first parent pointer
