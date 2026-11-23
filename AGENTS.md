@@ -50,7 +50,9 @@ src/
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
     negotiation.ts           # Perfect negotiation for media over the data channel
     peer.ts                  # RTCPeerConnection wrapper, data handshake, media negotiation
-    media-child.ts           # getUserMedia adapter and stream cleanup
+    media-child.ts           # Capture tracks, gain graph, constraints and replaceTrack helpers
+    media-settings.ts        # Shared defaults, ranges and UI presets for M2 controls
+    media-stats.ts           # getStats() summary for actual fps, size, bitrate and audio level
     scanner.ts               # BarcodeDetector scanner with jsQR fallback
   composables/
     usePeerSession.ts        # Role session orchestration used by both views
@@ -88,13 +90,23 @@ that directory.
   chunks in any scan order.
 - The control channel is one ordered `RTCDataChannel` labelled `control`. Messages are versioned
   JSON with an `id`, and `decodeControlMessage` rejects unknown types, bad shapes, oversized
-  messages and out-of-range values. `hello`, `ping`, `pong` and `negotiate` exist in M0/M1.
+  messages and out-of-range values. M2 adds `set-video`, `set-audio` and `status`; every value has
+  an explicit range.
 - `PeerSession` always uses `iceServers: []`, waits for complete ICE gathering before returning an
   SDP, and keeps media and control on the same encrypted peer connection. Pairing creates only the
   data channel; `startMedia` adds the child's tracks after the channel is open and triggers a media
   offer over `negotiate`. `PerfectNegotiator` keeps the parent polite.
 - The media offer is limited to Opus and VP8 so its SDP fits in one control message. The QR code
   contains no codec details.
+- The parent controls `set-video` and `set-audio`. The child applies them to its real tracks:
+  video/audio off stops the track and calls `replaceTrack(null)`, on captures a fresh track and
+  replaces it. Frame rate uses `applyConstraints` plus `maxFramerate`; resolution and bitrate use
+  `scaleResolutionDownBy` and `maxBitrate`; microphone gain runs through a `GainNode`.
+- The child sends `status` every second with actual `getStats()` values (fps, frame size, bitrate,
+  audio level), the selected gain and processing flags, and battery when available. The parent
+  shows those values rather than only the requested ones.
+- Parent playback volume uses the video element's `volume`. iOS may ignore it and use hardware
+  volume instead; the UI still reflects the chosen value.
 - Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
 - Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
@@ -108,8 +120,8 @@ Current milestone status:
 - **M0 (prototype):** complete — copy/paste SDP, child/parent media, data-channel ping.
 - **M1 (pairing):** complete — compact single-code QR offer and answer, full-SDP fallback, scanner,
   expiry, short code, media negotiation over the data channel, Playwright two-context test.
-- **M2 (control):** in progress — media negotiation over the data channel is complete; audio/video
-  toggles, frame rate, resolution, bitrate, gain and status are next.
+- **M2 (control):** complete — media negotiation, audio/video on/off, frame rate, resolution,
+  bitrate, gain, noise suppression, automatic gain, volume and actual status display.
 
 ## End-to-End Tests
 
@@ -117,7 +129,9 @@ Current milestone status:
 launch flags supply fake camera/microphone input and disable mDNS host-candidate hiding, so the two
 contexts build a real WebRTC connection. The test drives the full offer/answer flow through the text
 fallback, asserts both codes are a single compact chunk, then checks that media is negotiated over
-the data channel, the parent receives video, both short codes match, and a ping produces an RTT.
+the data channel, the parent receives video, both short codes match, and a ping produces an RTT. It
+also toggles video and audio, changes frame rate, resolution and bitrate, enables noise suppression
+and automatic gain, sets gain and volume, and verifies the child's tracks and reported status.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
 `npx playwright install chromium`.

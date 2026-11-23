@@ -3,11 +3,12 @@
 A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR code, then send
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
-The current build covers Milestones 0 and 1 from the
-[concept](docs/babyphone-concept.md), plus the media-negotiation part of M2: a compact data-channel
-handshake by QR code or copy/paste, media negotiated over that encrypted channel, and a
-data-channel ping. Media controls, wake locks, heartbeat alarms and presentation features are
-still to come.
+The current build covers Milestones 0, 1 and 2 from the
+[concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
+media negotiated over that encrypted channel, and parent controls for video, audio, frame rate,
+resolution, bitrate, microphone gain, noise suppression, automatic gain and volume. The child
+reports the values that actually took effect. Wake locks, heartbeat alarms and presentation
+features are still to come.
 
 ## Pairing
 
@@ -25,6 +26,12 @@ two minutes. A compressed full-SDP fallback still supports chunking if a browser
 it. The scanner reads continuously while the dialog is open; there is no shutter button. Both
 devices derive the same six-digit short code from the DTLS fingerprints so you can compare them out
 of band.
+
+Once connected, the parent device can turn video or audio off and on, change the frame rate,
+resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
+The child stops the camera or microphone track when it is switched off, so the camera light goes
+out. The parent also has a playback volume slider; on iOS the hardware volume may still be the
+effective control.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation. There is no reconnection after a network change yet; pair again if the connection is

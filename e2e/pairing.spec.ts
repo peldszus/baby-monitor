@@ -60,6 +60,72 @@ test.describe('pairing', () => {
       await expect(child.getByTestId('send-ping')).toBeEnabled()
       await child.getByTestId('send-ping').click()
       await expect(child.getByTestId('rtt')).toHaveText(/\d+ ms/)
+
+      const mediaStatus = parent.getByTestId('media-status')
+      const audioStatus = parent.getByTestId('audio-status')
+      await expect(mediaStatus).toContainText('Video on')
+      await expect(audioStatus).toContainText('Mic on')
+
+      const videoToggle = parent.getByTestId('video-toggle').locator('input')
+      await videoToggle.click()
+      await expect(mediaStatus).toContainText('Video off')
+      expect(
+        await child
+          .getByTestId('local-video')
+          .evaluate((element) => (element as HTMLVideoElement).srcObject?.getVideoTracks().length)
+      ).toBe(0)
+      await videoToggle.click()
+      await expect(mediaStatus).toContainText('Video on')
+      await expect
+        .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).videoWidth))
+        .toBeGreaterThan(0)
+
+      const audioToggle = parent.getByTestId('audio-toggle').locator('input')
+      await audioToggle.click()
+      await expect(audioStatus).toContainText('Mic off')
+      expect(
+        await child
+          .getByTestId('local-video')
+          .evaluate((element) => (element as HTMLVideoElement).srcObject?.getAudioTracks().length)
+      ).toBe(0)
+      await audioToggle.click()
+      await expect(audioStatus).toContainText('Mic on')
+      expect(
+        await child
+          .getByTestId('local-video')
+          .evaluate((element) => (element as HTMLVideoElement).srcObject?.getAudioTracks().length)
+      ).toBe(1)
+
+      await parent.getByTestId('fps-5').click()
+      await expect(mediaStatus).toContainText('5 fps')
+
+      await parent.getByTestId('resolution-2').click()
+      await expect(mediaStatus).toContainText('640×360')
+
+      await parent.getByTestId('bitrate-250000').click()
+      await expect(mediaStatus).toContainText('kbps')
+
+      const noiseToggle = parent.getByTestId('noise-toggle').locator('input')
+      await noiseToggle.click()
+      await expect(audioStatus).toContainText('NS on')
+      const autoGainToggle = parent.getByTestId('auto-gain-toggle').locator('input')
+      await autoGainToggle.click()
+      await expect(audioStatus).toContainText('AGC on')
+
+      const gain = parent.getByTestId('gain-slider').getByRole('slider')
+      await gain.focus()
+      await gain.press('End')
+      await expect(audioStatus).toContainText('gain 4.0')
+
+      const volume = parent.getByTestId('volume-slider').getByRole('slider')
+      await volume.focus()
+      await volume.press('Home')
+      await expect
+        .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).volume))
+        .toBe(0)
+
+      await expect(parent.getByTestId('error')).toHaveCount(0)
+      await expect(child.getByTestId('error')).toHaveCount(0)
     } finally {
       await childContext.close()
       await parentContext.close()

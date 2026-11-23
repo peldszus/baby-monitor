@@ -1,3 +1,9 @@
+import {
+  AUDIO_LIMITS,
+  VIDEO_LIMITS,
+  type AudioSettings,
+  type VideoSettings,
+} from './media-settings'
 import type { NegotiationDescription } from './negotiation'
 
 export type ControlRole = 'child' | 'parent'
@@ -30,7 +36,38 @@ export interface NegotiateMessage extends MessageBase {
   description: NegotiationDescription
 }
 
-export type ControlMessage = HelloMessage | PingMessage | PongMessage | NegotiateMessage
+export interface SetVideoMessage extends MessageBase, VideoSettings {
+  type: 'set-video'
+}
+
+export interface SetAudioMessage extends MessageBase, AudioSettings {
+  type: 'set-audio'
+}
+
+export interface StatusMessage extends MessageBase {
+  type: 'status'
+  battery: number | null
+  charging: boolean | null
+  fps: number
+  width: number
+  height: number
+  bitrate: number
+  audioLevel: number
+  gain: number
+  videoEnabled: boolean
+  audioEnabled: boolean
+  noiseSuppression: boolean
+  autoGainControl: boolean
+}
+
+export type ControlMessage =
+  | HelloMessage
+  | PingMessage
+  | PongMessage
+  | NegotiateMessage
+  | SetVideoMessage
+  | SetAudioMessage
+  | StatusMessage
 
 export type DecodeFailure = 'too-large' | 'invalid-json' | 'invalid-shape' | 'unknown-type'
 
@@ -46,6 +83,18 @@ const encoder = new TextEncoder()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNumberInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+}
+
+function isNullableNumberInRange(value: unknown, min: number, max: number): value is number | null {
+  return value === null || isNumberInRange(value, min, max)
+}
+
+function isNullableBoolean(value: unknown): value is boolean | null {
+  return value === null || typeof value === 'boolean'
 }
 
 function makeId(): string {
@@ -69,6 +118,20 @@ export function createPong(t: number): PongMessage {
 
 export function createNegotiate(description: NegotiationDescription): NegotiateMessage {
   return { v: 1, id: makeId(), type: 'negotiate', description }
+}
+
+export function createSetVideo(settings: VideoSettings): SetVideoMessage {
+  return { v: 1, id: makeId(), type: 'set-video', ...settings }
+}
+
+export function createSetAudio(settings: AudioSettings): SetAudioMessage {
+  return { v: 1, id: makeId(), type: 'set-audio', ...settings }
+}
+
+export type StatusInput = Omit<StatusMessage, 'v' | 'id' | 'type'>
+
+export function createStatus(status: StatusInput): StatusMessage {
+  return { v: 1, id: makeId(), type: 'status', ...status }
 }
 
 export function encodeControlMessage(message: ControlMessage): string {
@@ -105,6 +168,92 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
   if (typeof value.type !== 'string') return { ok: false, reason: 'invalid-shape' }
 
   switch (value.type) {
+    case 'set-video': {
+      if (
+        typeof value.enabled !== 'boolean' ||
+        !isNumberInRange(value.fps, VIDEO_LIMITS.fpsMin, VIDEO_LIMITS.fpsMax) ||
+        !isNumberInRange(
+          value.scaleDownBy,
+          VIDEO_LIMITS.scaleDownByMin,
+          VIDEO_LIMITS.scaleDownByMax
+        ) ||
+        !isNumberInRange(value.maxBitrate, VIDEO_LIMITS.bitrateMin, VIDEO_LIMITS.bitrateMax)
+      ) {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      return {
+        ok: true,
+        message: {
+          v: 1,
+          id: value.id,
+          type: 'set-video',
+          enabled: value.enabled,
+          fps: value.fps,
+          scaleDownBy: value.scaleDownBy,
+          maxBitrate: value.maxBitrate,
+        },
+      }
+    }
+    case 'set-audio': {
+      if (
+        typeof value.enabled !== 'boolean' ||
+        !isNumberInRange(value.gain, AUDIO_LIMITS.gainMin, AUDIO_LIMITS.gainMax) ||
+        typeof value.noiseSuppression !== 'boolean' ||
+        typeof value.autoGainControl !== 'boolean'
+      ) {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      return {
+        ok: true,
+        message: {
+          v: 1,
+          id: value.id,
+          type: 'set-audio',
+          enabled: value.enabled,
+          gain: value.gain,
+          noiseSuppression: value.noiseSuppression,
+          autoGainControl: value.autoGainControl,
+        },
+      }
+    }
+    case 'status': {
+      if (
+        !isNullableNumberInRange(value.battery, 0, 100) ||
+        !isNullableBoolean(value.charging) ||
+        !isNumberInRange(value.fps, 0, 120) ||
+        !isNumberInRange(value.width, 0, 7680) ||
+        !isNumberInRange(value.height, 0, 7680) ||
+        !isNumberInRange(value.bitrate, 0, 100_000_000) ||
+        !isNumberInRange(value.audioLevel, 0, 1) ||
+        !isNumberInRange(value.gain, AUDIO_LIMITS.gainMin, AUDIO_LIMITS.gainMax) ||
+        typeof value.videoEnabled !== 'boolean' ||
+        typeof value.audioEnabled !== 'boolean' ||
+        typeof value.noiseSuppression !== 'boolean' ||
+        typeof value.autoGainControl !== 'boolean'
+      ) {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      return {
+        ok: true,
+        message: {
+          v: 1,
+          id: value.id,
+          type: 'status',
+          battery: value.battery,
+          charging: value.charging,
+          fps: value.fps,
+          width: value.width,
+          height: value.height,
+          bitrate: value.bitrate,
+          audioLevel: value.audioLevel,
+          gain: value.gain,
+          videoEnabled: value.videoEnabled,
+          audioEnabled: value.audioEnabled,
+          noiseSuppression: value.noiseSuppression,
+          autoGainControl: value.autoGainControl,
+        },
+      }
+    }
     case 'hello': {
       if (value.role !== 'child' && value.role !== 'parent') {
         return { ok: false, reason: 'invalid-shape' }

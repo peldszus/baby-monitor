@@ -1,4 +1,6 @@
 import { encodeControlMessage, type ControlMessage } from './control'
+import { summarizeMediaStats, type MediaStatus, type StatsSnapshot } from './media-stats'
+import type { VideoSettings } from './media-settings'
 import { PerfectNegotiator, waitForIceGathering, type NegotiationDescription } from './negotiation'
 
 export { waitForIceGathering }
@@ -28,6 +30,9 @@ export class PeerSession {
   private readonly callbacks: PeerCallbacks
   private readonly negotiator: PerfectNegotiator
   private channel: RTCDataChannel | null = null
+  private videoSender: RTCRtpSender | null = null
+  private audioSender: RTCRtpSender | null = null
+  private statsSnapshot: StatsSnapshot = {}
 
   constructor(
     readonly role: PeerRole,
@@ -89,10 +94,54 @@ export class PeerSession {
 
   startMedia(stream: MediaStream): void {
     for (const track of stream.getTracks()) {
-      this.connection.addTrack(track, stream)
+      const sender = this.connection.addTrack(track, stream)
+      if (track.kind === 'video') this.videoSender = sender
+      else if (track.kind === 'audio') this.audioSender = sender
     }
     this.limitCodecs()
     this.negotiator.enable()
+  }
+
+  async replaceVideoTrack(track: MediaStreamTrack | null): Promise<void> {
+    await this.replaceTrack('video', track)
+  }
+
+  async replaceAudioTrack(track: MediaStreamTrack | null): Promise<void> {
+    await this.replaceTrack('audio', track)
+  }
+
+  async applyVideoParameters(settings: VideoSettings): Promise<void> {
+    const sender = this.videoSender
+    if (!sender) return
+    const parameters = sender.getParameters()
+    if (!parameters.encodings || parameters.encodings.length === 0) {
+      parameters.encodings = [{}]
+    }
+    parameters.encodings[0].maxFramerate = settings.fps
+    parameters.encodings[0].scaleResolutionDownBy = settings.scaleDownBy
+    parameters.encodings[0].maxBitrate = settings.maxBitrate
+    parameters.degradationPreference = 'balanced'
+    try {
+      await sender.setParameters(parameters)
+    } catch {
+      // Older browsers may reject individual parameters. The track constraints
+      // still apply the frame rate, and status reports what actually took effect.
+    }
+  }
+
+  async getMediaStats(context: {
+    videoEnabled: boolean
+    audioEnabled: boolean
+    gain: number
+    noiseSuppression: boolean
+    autoGainControl: boolean
+    fallbackWidth?: number
+    fallbackHeight?: number
+  }): Promise<MediaStatus> {
+    const report = await this.connection.getStats()
+    const result = summarizeMediaStats(report, this.statsSnapshot, context)
+    this.statsSnapshot = result.snapshot
+    return result.status
   }
 
   async handleNegotiation(description: NegotiationDescription): Promise<void> {
@@ -109,8 +158,26 @@ export class PeerSession {
   close(): void {
     this.channel?.close()
     this.channel = null
+    this.videoSender = null
+    this.audioSender = null
+    this.statsSnapshot = {}
     this.connection.onnegotiationneeded = null
     this.connection.close()
+  }
+
+  private async replaceTrack(
+    kind: 'video' | 'audio',
+    track: MediaStreamTrack | null
+  ): Promise<void> {
+    let sender = kind === 'video' ? this.videoSender : this.audioSender
+    if (!sender) {
+      if (!track) return
+      sender = this.connection.addTrack(track, new MediaStream([track]))
+      if (kind === 'video') this.videoSender = sender
+      else this.audioSender = sender
+      return
+    }
+    await sender.replaceTrack(track)
   }
 
   private bindChannel(channel: RTCDataChannel): void {

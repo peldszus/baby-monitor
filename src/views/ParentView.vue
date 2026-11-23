@@ -6,6 +6,7 @@ import QrScanner from '@/components/QrScanner.vue'
 import SignalQr from '@/components/SignalQr.vue'
 import VideoStream from '@/components/VideoStream.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
+import { BITRATE_OPTIONS, FPS_OPTIONS, RESOLUTION_OPTIONS } from '@/core/media-settings'
 
 const {
   state,
@@ -18,8 +19,17 @@ const {
   rttMs,
   peerState,
   channelOpen,
+  videoSettings,
+  audioSettings,
+  volume,
+  mediaStatus,
+  batteryLevel,
+  charging,
   acceptOffer,
   sendPing,
+  updateVideoSettings,
+  updateAudioSettings,
+  setVolume,
   reset,
 } = usePeerSession('parent')
 
@@ -29,6 +39,67 @@ const answerText = computed(() => answerChunks.value.join('\n'))
 const pairingVisible = computed(() => state.value === 'pairing' || state.value === 'connecting')
 const monitoring = computed(() => state.value === 'connected' || state.value === 'degraded')
 const answerReady = computed(() => answerChunks.value.length > 0)
+
+const statusLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for the child status…'
+  const video = status.videoEnabled ? 'Video on' : 'Video off'
+  return `${video} · ${status.width}×${status.height} · ${status.fps} fps · ${formatBitrate(status.bitrate)}`
+})
+
+const audioLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for microphone status…'
+  const audio = status.audioEnabled ? 'Mic on' : 'Mic off'
+  const processing = `NS ${status.noiseSuppression ? 'on' : 'off'} · AGC ${status.autoGainControl ? 'on' : 'off'}`
+  return `${audio} · gain ${status.gain.toFixed(1)} · level ${Math.round(status.audioLevel * 100)}% · ${processing}`
+})
+
+const batteryLine = computed(() => {
+  if (batteryLevel.value === null) return null
+  return `${batteryLevel.value}%${charging.value ? ' charging' : ''}`
+})
+
+function formatBitrate(bitsPerSecond: number): string {
+  if (bitsPerSecond >= 1_000_000) return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`
+  return `${Math.round(bitsPerSecond / 1000)} kbps`
+}
+
+function setVideoEnabled(value: boolean | null): void {
+  if (typeof value === 'boolean') updateVideoSettings({ enabled: value })
+}
+
+function setAudioEnabled(value: boolean | null): void {
+  if (typeof value === 'boolean') updateAudioSettings({ enabled: value })
+}
+
+function setFps(value: unknown): void {
+  if (typeof value === 'number') updateVideoSettings({ fps: value })
+}
+
+function setScaleDownBy(value: unknown): void {
+  if (typeof value === 'number') updateVideoSettings({ scaleDownBy: value })
+}
+
+function setMaxBitrate(value: unknown): void {
+  if (typeof value === 'number') updateVideoSettings({ maxBitrate: value })
+}
+
+function setNoiseSuppression(value: boolean | null): void {
+  if (typeof value === 'boolean') updateAudioSettings({ noiseSuppression: value })
+}
+
+function setAutoGainControl(value: boolean | null): void {
+  if (typeof value === 'boolean') updateAudioSettings({ autoGainControl: value })
+}
+
+function setGain(value: number | number[]): void {
+  updateAudioSettings({ gain: Array.isArray(value) ? value[0] : value })
+}
+
+function setVolumeValue(value: number | number[]): void {
+  setVolume(Array.isArray(value) ? value[0] : value)
+}
 
 async function submitOffer(): Promise<void> {
   const accepted = await acceptOffer(pasteText.value)
@@ -142,7 +213,150 @@ function startOver(): void {
 
     <template v-else-if="monitoring">
       <ConnectionStatus :state="state" :peer-state="peerState" :rtt-ms="rttMs" />
-      <VideoStream :stream="remoteStream" test-id="remote-video" />
+      <VideoStream
+        :stream="remoteStream"
+        :volume="volume"
+        :muted="!audioSettings.enabled"
+        test-id="remote-video"
+      />
+
+      <section class="panel status-panel">
+        <div class="status-heading">
+          <h2>Live status</h2>
+          <v-chip v-if="batteryLine" size="small" variant="tonal">{{ batteryLine }}</v-chip>
+        </div>
+        <p data-testid="media-status">{{ statusLine }}</p>
+        <p data-testid="audio-status">{{ audioLine }}</p>
+      </section>
+
+      <section class="panel controls-panel">
+        <h2>Camera and sound</h2>
+        <v-switch
+          :model-value="videoSettings.enabled"
+          label="Video"
+          color="primary"
+          hide-details
+          data-testid="video-toggle"
+          @update:model-value="setVideoEnabled"
+        />
+        <v-switch
+          :model-value="audioSettings.enabled"
+          label="Audio"
+          color="primary"
+          hide-details
+          data-testid="audio-toggle"
+          @update:model-value="setAudioEnabled"
+        />
+
+        <v-switch
+          :model-value="audioSettings.noiseSuppression"
+          label="Noise suppression"
+          color="primary"
+          hide-details
+          data-testid="noise-toggle"
+          @update:model-value="setNoiseSuppression"
+        />
+        <v-switch
+          :model-value="audioSettings.autoGainControl"
+          label="Automatic gain"
+          color="primary"
+          hide-details
+          data-testid="auto-gain-toggle"
+          @update:model-value="setAutoGainControl"
+        />
+
+        <div class="control-row">
+          <span>Frame rate</span>
+          <v-btn-toggle
+            :model-value="videoSettings.fps"
+            mandatory
+            density="comfortable"
+            variant="tonal"
+            @update:model-value="setFps"
+          >
+            <v-btn
+              v-for="fps in FPS_OPTIONS"
+              :key="fps"
+              :value="fps"
+              size="small"
+              :data-testid="`fps-${fps}`"
+            >
+              {{ fps }}
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+
+        <div class="control-row">
+          <span>Resolution</span>
+          <v-btn-toggle
+            :model-value="videoSettings.scaleDownBy"
+            mandatory
+            density="comfortable"
+            variant="tonal"
+            @update:model-value="setScaleDownBy"
+          >
+            <v-btn
+              v-for="option in RESOLUTION_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+              size="small"
+              :data-testid="`resolution-${option.value}`"
+            >
+              {{ option.title }}
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+
+        <div class="control-row">
+          <span>Bitrate</span>
+          <v-btn-toggle
+            :model-value="videoSettings.maxBitrate"
+            mandatory
+            density="comfortable"
+            variant="tonal"
+            @update:model-value="setMaxBitrate"
+          >
+            <v-btn
+              v-for="option in BITRATE_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+              size="small"
+              :data-testid="`bitrate-${option.value}`"
+            >
+              {{ option.title }}
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+
+        <div class="control-row">
+          <span>Mic gain {{ audioSettings.gain.toFixed(1) }}</span>
+          <v-slider
+            :model-value="audioSettings.gain"
+            :min="0"
+            :max="4"
+            :step="0.1"
+            color="primary"
+            hide-details
+            data-testid="gain-slider"
+            @update:model-value="setGain"
+          />
+        </div>
+
+        <div class="control-row">
+          <span>Volume {{ Math.round(volume * 100) }}%</span>
+          <v-slider
+            :model-value="volume"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            color="primary"
+            hide-details
+            data-testid="volume-slider"
+            @update:model-value="setVolumeValue"
+          />
+        </div>
+        <p class="progress">Actual values come from the child device.</p>
+      </section>
       <section v-if="shortCode" class="panel short-code-panel">
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
@@ -200,6 +414,24 @@ function startOver(): void {
 }
 
 .progress {
+  font-size: 0.875rem;
+  color: rgb(var(--v-theme-on-surface-muted));
+}
+
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-row > span {
   font-size: 0.875rem;
   color: rgb(var(--v-theme-on-surface-muted));
 }

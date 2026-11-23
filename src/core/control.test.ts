@@ -4,6 +4,9 @@ import {
   createNegotiate,
   createPing,
   createPong,
+  createSetAudio,
+  createSetVideo,
+  createStatus,
   decodeControlMessage,
   encodeControlMessage,
   MAX_CONTROL_MESSAGE_BYTES,
@@ -35,6 +38,61 @@ describe('control protocol', () => {
       ok: true,
       message: negotiate,
     })
+  })
+
+  it('round-trips M2 control and status messages', () => {
+    const video = createSetVideo({ enabled: true, fps: 10, scaleDownBy: 2, maxBitrate: 500_000 })
+    const audio = createSetAudio({
+      enabled: true,
+      gain: 1.5,
+      noiseSuppression: true,
+      autoGainControl: false,
+    })
+    const status = createStatus({
+      battery: 87,
+      charging: true,
+      fps: 10,
+      width: 640,
+      height: 360,
+      bitrate: 480_000,
+      audioLevel: 0.25,
+      gain: 1.5,
+      videoEnabled: true,
+      audioEnabled: true,
+      noiseSuppression: true,
+      autoGainControl: false,
+    })
+
+    for (const message of [video, audio, status]) {
+      expect(decodeControlMessage(encodeControlMessage(message))).toEqual({
+        ok: true,
+        message,
+      })
+    }
+  })
+
+  it('rejects M2 values outside their ranges', () => {
+    const invalid = [
+      '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":0,"scaleDownBy":1,"maxBitrate":500000}',
+      '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":31,"scaleDownBy":1,"maxBitrate":500000}',
+      '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":10,"scaleDownBy":9,"maxBitrate":500000}',
+      '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":10,"scaleDownBy":1,"maxBitrate":1000}',
+      '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":-1,"noiseSuppression":false,"autoGainControl":false}',
+      '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":4.1,"noiseSuppression":false,"autoGainControl":false}',
+      '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":1,"noiseSuppression":"yes","autoGainControl":false}',
+      '{"v":1,"id":"x","type":"status","battery":101,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":0,"gain":1,"videoEnabled":true,"audioEnabled":true}',
+      '{"v":1,"id":"x","type":"status","battery":50,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":1.1,"gain":1,"videoEnabled":true,"audioEnabled":true}',
+    ]
+    for (const raw of invalid) {
+      expect(decodeControlMessage(raw)).toEqual({ ok: false, reason: 'invalid-shape' })
+    }
+  })
+
+  it('accepts unknown battery support as null', () => {
+    const raw =
+      '{"v":1,"id":"x","type":"status","battery":null,"charging":null,"fps":0,"width":0,"height":0,"bitrate":0,"audioLevel":0,"gain":0,"videoEnabled":false,"audioEnabled":false,"noiseSuppression":false,"autoGainControl":false}'
+    const result = decodeControlMessage(raw)
+    expect(result.ok).toBe(true)
   })
 
   it('rejects malformed JSON and unknown types', () => {

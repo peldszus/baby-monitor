@@ -18,6 +18,9 @@ const {
   rttMs,
   peerState,
   channelOpen,
+  mediaStatus,
+  batteryLevel,
+  charging,
   startChild,
   acceptAnswer,
   sendPing,
@@ -29,6 +32,31 @@ const pasteText = ref('')
 const offerText = computed(() => offerChunks.value.join('\n'))
 const pairingVisible = computed(() => state.value === 'pairing' || state.value === 'connecting')
 const monitoring = computed(() => state.value === 'connected' || state.value === 'degraded')
+
+const statusLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for media status…'
+  const video = status.videoEnabled ? 'Video on' : 'Video off'
+  return `${video} · ${status.width}×${status.height} · ${status.fps} fps · ${formatBitrate(status.bitrate)}`
+})
+
+const audioLine = computed(() => {
+  const status = mediaStatus.value
+  if (!status) return 'Waiting for microphone status…'
+  const audio = status.audioEnabled ? 'Mic on' : 'Mic off'
+  const processing = `NS ${status.noiseSuppression ? 'on' : 'off'} · AGC ${status.autoGainControl ? 'on' : 'off'}`
+  return `${audio} · gain ${status.gain.toFixed(1)} · level ${Math.round(status.audioLevel * 100)}% · ${processing}`
+})
+
+const batteryLine = computed(() => {
+  if (batteryLevel.value === null) return null
+  return `${batteryLevel.value}%${charging.value ? ' charging' : ''}`
+})
+
+function formatBitrate(bitsPerSecond: number): string {
+  if (bitsPerSecond >= 1_000_000) return `${(bitsPerSecond / 1_000_000).toFixed(1)} Mbps`
+  return `${Math.round(bitsPerSecond / 1000)} kbps`
+}
 
 async function start(): Promise<void> {
   await startChild()
@@ -120,6 +148,15 @@ function startOver(): void {
     <template v-else-if="monitoring">
       <ConnectionStatus :state="state" :peer-state="peerState" :rtt-ms="rttMs" />
       <VideoStream :stream="localStream" muted test-id="local-video" />
+      <section class="panel status-panel">
+        <div class="status-heading">
+          <h2>Live status</h2>
+          <v-chip v-if="batteryLine" size="small" variant="tonal">{{ batteryLine }}</v-chip>
+        </div>
+        <p data-testid="child-media-status">{{ statusLine }}</p>
+        <p data-testid="child-audio-status">{{ audioLine }}</p>
+        <p class="progress">The parent device controls video and sound.</p>
+      </section>
       <section v-if="shortCode" class="panel short-code-panel">
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
@@ -184,6 +221,13 @@ function startOver(): void {
 .progress {
   font-size: 0.875rem;
   color: rgb(var(--v-theme-on-surface-muted));
+}
+
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .short-code-panel {
