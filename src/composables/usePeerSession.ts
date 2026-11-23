@@ -106,6 +106,7 @@ export function usePeerSession(role: PeerRole) {
   let peer: PeerSession | null = null
   let media: ChildMediaController | null = null
   let statusTimer: ReturnType<typeof setInterval> | null = null
+  let pingTimer: ReturnType<typeof setInterval> | null = null
   let statusInFlight = false
   let channel: RTCDataChannel | null = null
   let offerSdp = ''
@@ -127,9 +128,23 @@ export function usePeerSession(role: PeerRole) {
     statusTimer = null
   }
 
+  function stopPingLoop(): void {
+    if (pingTimer) clearInterval(pingTimer)
+    pingTimer = null
+  }
+
+  function startPingLoop(): void {
+    stopPingLoop()
+    void sendPing()
+    pingTimer = setInterval(() => {
+      void sendPing()
+    }, 2000)
+  }
+
   function cleanupPeer(): void {
     closedByUs = true
     stopStatusLoop()
+    stopPingLoop()
     media?.stop()
     media = null
     if (peer) {
@@ -393,12 +408,14 @@ export function usePeerSession(role: PeerRole) {
         fail(cause, 'Could not send the control handshake.')
         return
       }
+      startPingLoop()
       void onChannelReady()
     }
 
     nextChannel.onopen = announce
     nextChannel.onclose = () => {
       channelOpen.value = false
+      stopPingLoop()
     }
     nextChannel.onmessage = (event) => {
       void handleControl(event.data)
@@ -610,7 +627,6 @@ export function usePeerSession(role: PeerRole) {
     startChild,
     acceptOffer,
     acceptAnswer,
-    sendPing,
     updateVideoSettings,
     updateAudioSettings,
     setVolume,

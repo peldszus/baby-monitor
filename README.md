@@ -7,8 +7,8 @@ The current build covers Milestones 0, 1 and 2 from the
 [concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
 media negotiated over that encrypted channel, and parent controls for video, audio, frame rate,
 resolution, bitrate, microphone gain, noise suppression, automatic gain and volume. The child
-reports the values that actually took effect. Wake locks, heartbeat alarms and presentation
-features are still to come.
+reports the values that actually took effect. Both devices exchange an automatic RTT ping every
+two seconds. Wake locks, heartbeat alarms and presentation features are still to come.
 
 ## Pairing
 
@@ -31,7 +31,8 @@ Once connected, the parent device can turn video or audio off and on, change the
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
 The child stops the camera or microphone track when it is switched off, so the camera light goes
 out. The parent also has a playback volume slider; on iOS the hardware volume may still be the
-effective control.
+effective control. Each device pings the other every two seconds and shows the latest round-trip
+time next to the connection state.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation. There is no reconnection after a network change yet; pair again if the connection is

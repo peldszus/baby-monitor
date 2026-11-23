@@ -26,7 +26,6 @@ const {
   batteryLevel,
   charging,
   acceptOffer,
-  sendPing,
   updateVideoSettings,
   updateAudioSettings,
   setVolume,
@@ -361,15 +360,6 @@ function startOver(): void {
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
       </section>
-      <v-btn
-        variant="tonal"
-        block
-        :disabled="!channelOpen"
-        data-testid="send-ping"
-        @click="sendPing"
-      >
-        Send ping
-      </v-btn>
       <v-btn variant="text" block @click="startOver">Stop monitoring</v-btn>
     </template>
 

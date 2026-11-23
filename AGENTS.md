@@ -121,7 +121,8 @@ Current milestone status:
 - **M1 (pairing):** complete — compact single-code QR offer and answer, full-SDP fallback, scanner,
   expiry, short code, media negotiation over the data channel, Playwright two-context test.
 - **M2 (control):** complete — media negotiation, audio/video on/off, frame rate, resolution,
-  bitrate, gain, noise suppression, automatic gain, volume and actual status display.
+  bitrate, gain, noise suppression, automatic gain, volume, actual status display and a two-second
+  bidirectional RTT heartbeat.
 
 ## End-to-End Tests
 
@@ -129,8 +130,9 @@ Current milestone status:
 launch flags supply fake camera/microphone input and disable mDNS host-candidate hiding, so the two
 contexts build a real WebRTC connection. The test drives the full offer/answer flow through the text
 fallback, asserts both codes are a single compact chunk, then checks that media is negotiated over
-the data channel, the parent receives video, both short codes match, and a ping produces an RTT. It
-also toggles video and audio, changes frame rate, resolution and bitrate, enables noise suppression
+the data channel, the parent receives video, both short codes match, and both devices show an
+automatic RTT. It also toggles video and audio, changes frame rate, resolution and bitrate, enables
+noise suppression
 and automatic gain, sets gain and volume, and verifies the child's tracks and reported status.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with

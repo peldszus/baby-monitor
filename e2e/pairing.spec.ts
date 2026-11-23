@@ -43,6 +43,10 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('connection-state')).toHaveText('Connected', {
         timeout: 45_000,
       })
+      await expect(parent.getByTestId('rtt')).toHaveText(/\d+ ms/, { timeout: 30_000 })
+      await expect(child.getByTestId('rtt')).toHaveText(/\d+ ms/, { timeout: 30_000 })
+      await expect(parent.getByTestId('send-ping')).toHaveCount(0)
+      await expect(child.getByTestId('send-ping')).toHaveCount(0)
 
       const remoteVideo = parent.getByTestId('remote-video')
       await expect
@@ -56,10 +60,6 @@ test.describe('pairing', () => {
       expect(await parent.getByTestId('short-code').textContent()).toBe(
         await child.getByTestId('short-code').textContent()
       )
-
-      await expect(child.getByTestId('send-ping')).toBeEnabled()
-      await child.getByTestId('send-ping').click()
-      await expect(child.getByTestId('rtt')).toHaveText(/\d+ ms/)
 
       const mediaStatus = parent.getByTestId('media-status')
       const audioStatus = parent.getByTestId('audio-status')
