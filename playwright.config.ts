@@ -11,6 +11,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     permissions: ['camera', 'microphone'],
     trace: 'retain-on-failure',
+    serviceWorkers: 'block',
     launchOptions: {
       args: [
         // Deliver a test picture and tone without a permission dialog.
