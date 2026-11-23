@@ -48,6 +48,13 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  server: {
+    watch: {
+      // Playwright writes traces while the dev server runs. Without this ignore
+      // Vite treats those files as outside the module graph and reloads the page.
+      ignored: ['**/test-results/**', '**/playwright-report/**'],
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
