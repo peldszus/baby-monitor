@@ -110,7 +110,12 @@ function startOver(): void {
     </section>
 
     <section v-else-if="state === 'pairing' && !channelOpen" class="panel pairing-panel">
-      <h2>Show this code to the parent</h2>
+      <div class="panel-heading">
+        <h2>Show this code to the parent</h2>
+        <v-btn variant="text" size="small" class="heading-action" @click="startOver">
+          Start over
+        </v-btn>
+      </div>
       <SignalQr :chunks="offerChunks" label="Child pairing code" :expires-at="offerExpiresAt" />
       <v-btn
         color="primary"
@@ -149,6 +154,7 @@ function startOver(): void {
       <p data-testid="pairing-progress">
         {{ pairingProgress ?? 'Setting up the encrypted connection…' }}
       </p>
+      <v-btn variant="text" size="small" @click="startOver">Cancel</v-btn>
     </section>
 
     <template v-else-if="monitoring">
@@ -206,7 +212,7 @@ function startOver(): void {
 }
 
 .pairing .panel {
-  gap: 8px;
+  gap: 6px;
   padding: 12px;
 }
 
@@ -214,6 +220,10 @@ function startOver(): void {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.heading-action {
+  margin-left: auto;
 }
 
 .panel h2 {

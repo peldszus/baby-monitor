@@ -136,6 +136,9 @@ function startOver(): void {
       <div class="panel-heading">
         <v-icon :icon="mdiCellphone" color="primary" />
         <h2>Parent device</h2>
+        <v-btn variant="text" size="small" class="heading-action" @click="startOver">
+          Start over
+        </v-btn>
       </div>
       <p>Scan the child device's code to receive video and audio.</p>
       <v-btn
@@ -164,7 +167,12 @@ function startOver(): void {
     </section>
 
     <section v-else-if="!monitoring && answerReady && !channelOpen" class="panel pairing-panel">
-      <h2>Show this answer to the child</h2>
+      <div class="panel-heading">
+        <h2>Show this answer to the child</h2>
+        <v-btn variant="text" size="small" class="heading-action" @click="startOver">
+          Start over
+        </v-btn>
+      </div>
       <SignalQr :chunks="answerChunks" label="Parent answer code" :expires-at="answerExpiresAt" />
       <p class="progress">Waiting for the child device to accept the answer…</p>
       <TextCodePanel
@@ -335,6 +343,7 @@ function startOver(): void {
       <p data-testid="pairing-progress">
         {{ pairingProgress ?? 'Setting up the encrypted connection…' }}
       </p>
+      <v-btn variant="text" size="small" @click="startOver">Cancel</v-btn>
     </section>
 
     <p class="disclaimer">This app is not a medical device and does not replace supervision.</p>
@@ -368,7 +377,7 @@ function startOver(): void {
 }
 
 .pairing .panel {
-  gap: 8px;
+  gap: 6px;
   padding: 12px;
 }
 
@@ -376,6 +385,10 @@ function startOver(): void {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.heading-action {
+  margin-left: auto;
 }
 
 .panel h2 {

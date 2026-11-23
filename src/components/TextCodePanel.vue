@@ -60,7 +60,7 @@ const emit = defineEmits<{
 }
 
 .text-code :deep(.v-expansion-panel-title) {
-  min-height: 36px;
+  min-height: 28px;
   padding: 0 4px;
   color: rgb(var(--v-theme-on-surface-muted));
   font-size: 0.875rem;
