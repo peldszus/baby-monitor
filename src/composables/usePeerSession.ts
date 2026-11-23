@@ -81,6 +81,9 @@ function detectCapabilities(): string[] {
   if ('wakeLock' in navigator) caps.push('wake-lock')
   if ('BarcodeDetector' in globalThis) caps.push('barcode-detector')
   if (document.pictureInPictureEnabled) caps.push('picture-in-picture')
+  if (typeof HTMLCanvasElement !== 'undefined' && 'captureStream' in HTMLCanvasElement.prototype) {
+    caps.push('canvas-capture-stream')
+  }
   if (typeof RTCRtpSender !== 'undefined' && 'setParameters' in RTCRtpSender.prototype) {
     caps.push('rtp-parameters')
   }
