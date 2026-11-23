@@ -6,6 +6,9 @@ const props = defineProps<{
   state: SessionState
   peerState: string
   rttMs: number | null
+  reconnecting?: boolean
+  wakeLockActive?: boolean
+  wakeLockSupported?: boolean
 }>()
 
 const labels: Record<SessionState, string> = {
@@ -36,6 +39,34 @@ const color = computed(() => colors[props.state])
     <span class="peer-state">WebRTC: {{ peerState }}</span>
     <v-chip v-if="rttMs !== null" size="small" variant="text" data-testid="rtt">
       {{ rttMs }} ms
+    </v-chip>
+    <v-chip
+      v-if="reconnecting"
+      size="small"
+      color="warning"
+      variant="tonal"
+      data-testid="reconnecting"
+    >
+      Reconnecting…
+    </v-chip>
+    <v-chip v-if="wakeLockActive" size="small" variant="text" data-testid="wake-lock">
+      Screen awake
+    </v-chip>
+    <v-chip
+      v-else-if="wakeLockSupported === false"
+      size="small"
+      variant="text"
+      data-testid="wake-lock-unavailable"
+    >
+      Wake lock unavailable
+    </v-chip>
+    <v-chip
+      v-else-if="wakeLockSupported"
+      size="small"
+      variant="text"
+      data-testid="wake-lock-inactive"
+    >
+      Wake lock inactive
     </v-chip>
   </div>
 </template>

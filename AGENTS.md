@@ -46,6 +46,9 @@ src/
   core/
     state.ts                 # Explicit idle → pairing → connecting → connected → degraded → lost
     control.ts               # Versioned data-channel protocol with strict validation
+    heartbeat.ts             # Six-second heartbeat timeout evaluator
+    alarm.ts                 # Web Audio warning tone with user-gesture unlock
+    power.ts                 # Screen Wake Lock and fullscreen helpers
     signaling-qr.ts          # Compact handshake codec, full-SDP fallback, CRC-32 and expiry
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
     negotiation.ts           # Perfect negotiation for media over the data channel
@@ -60,7 +63,8 @@ src/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
     VideoStream.vue          # Attaches a MediaStream to a <video>
-    ConnectionStatus.vue     # State, peer state and RTT
+    ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
+    AlarmOverlay.vue         # Fullscreen parent warning when the connection fails
     PairingSteps.vue         # Three-node pairing progress indicator
     TextCodePanel.vue        # Collapsible text-code fallback
   views/
@@ -115,6 +119,19 @@ that directory.
   the answer. Text codes live in collapsed expansion panels so the QR flow stays above the fold.
   Pairing views use compact spacing and a viewport-height QR size; E2E checks 320×568, 360×640 and
   390×844 without page scrolling.
+- M3 operation: `HeartbeatMonitor` starts only when media is connected, so pairing delay cannot
+  raise a false alarm. The parent raises `alarmActive` after six seconds without a pong or on a
+  WebRTC failure while connected/degraded. `WebAudioAlarm` unlocks on the first parent pointer
+  event and again when monitoring starts; the visual warning stays until recovery or stop.
+- `ScreenWakeLock` requests `screen` while visible and re-requests it after `visibilitychange`.
+  The status row reports whether the lock is active or unavailable.
+- The parent sends `set-screen {dark}`; the child shows a black fixed overlay, tries
+  `requestFullscreen`, and reports `screenDark` in every status. Double-tap or long-press wakes the
+  child locally. `exitAppFullscreen` and the overlay are best effort where fullscreen is blocked.
+- On `disconnected`, both sides call `RTCPeerConnection.restartIce()` up to three times, four
+  seconds apart, while the data channel can still carry the negotiation. If the channel closes or
+  the restart fails, the session moves to `lost`, the parent alarm stays visible, and the UI asks
+  for a new pairing.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
 - Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
   pair and is near-white in the light theme, which is unreadable on the neutral panels.
@@ -130,6 +147,9 @@ Current milestone status:
 - **M2 (control):** complete — media negotiation, audio/video on/off, frame rate, resolution,
   bitrate, gain, noise suppression, automatic gain, volume, actual status display and a two-second
   bidirectional RTT heartbeat.
+- **M3 (operation):** complete — screen Wake Lock with visibility reacquisition, parent-controlled
+  black fullscreen child display, six-second heartbeat alarm with Web Audio warning, automatic ICE
+  restart attempts and a clear pairing prompt when recovery fails.
 
 ## End-to-End Tests
 
@@ -139,9 +159,10 @@ contexts build a real WebRTC connection. The test opens the collapsible text fal
 full offer/answer flow, asserts both codes are a single compact chunk, then checks that media is
 negotiated over the data channel, the parent receives video, both short codes match, and both
 devices show an automatic RTT. It also toggles video and audio, changes frame rate, resolution and
-bitrate, enables noise suppression and automatic gain, sets gain and volume, and verifies the
-child's tracks and reported status. Three additional cases check that the pairing screens do not
-scroll at phone viewport sizes.
+bitrate, enables noise suppression and automatic gain, sets gain and volume, toggles the child's
+dark screen, and verifies the child's tracks and reported status. A separate case closes the child
+context and checks that the parent alarm appears, can be silenced and can be stopped. Three
+additional cases check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
 `npx playwright install chromium`.

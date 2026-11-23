@@ -5,6 +5,7 @@ import {
   createPing,
   createPong,
   createSetAudio,
+  createSetScreen,
   createSetVideo,
   createStatus,
   decodeControlMessage,
@@ -48,6 +49,7 @@ describe('control protocol', () => {
       noiseSuppression: true,
       autoGainControl: false,
     })
+    const screen = createSetScreen(true)
     const status = createStatus({
       battery: 87,
       charging: true,
@@ -61,9 +63,10 @@ describe('control protocol', () => {
       audioEnabled: true,
       noiseSuppression: true,
       autoGainControl: false,
+      screenDark: false,
     })
 
-    for (const message of [video, audio, status]) {
+    for (const message of [video, audio, screen, status]) {
       expect(decodeControlMessage(encodeControlMessage(message))).toEqual({
         ok: true,
         message,
@@ -80,8 +83,10 @@ describe('control protocol', () => {
       '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":-1,"noiseSuppression":false,"autoGainControl":false}',
       '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":4.1,"noiseSuppression":false,"autoGainControl":false}',
       '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":1,"noiseSuppression":"yes","autoGainControl":false}',
-      '{"v":1,"id":"x","type":"status","battery":101,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":0,"gain":1,"videoEnabled":true,"audioEnabled":true}',
-      '{"v":1,"id":"x","type":"status","battery":50,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":1.1,"gain":1,"videoEnabled":true,"audioEnabled":true}',
+      '{"v":1,"id":"x","type":"set-screen","dark":"yes"}',
+      '{"v":1,"id":"x","type":"status","battery":101,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":0,"gain":1,"videoEnabled":true,"audioEnabled":true,"noiseSuppression":false,"autoGainControl":false,"screenDark":false}',
+      '{"v":1,"id":"x","type":"status","battery":50,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":1.1,"gain":1,"videoEnabled":true,"audioEnabled":true,"noiseSuppression":false,"autoGainControl":false,"screenDark":false}',
+      '{"v":1,"id":"x","type":"status","battery":50,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":0,"gain":1,"videoEnabled":true,"audioEnabled":true,"noiseSuppression":false,"autoGainControl":false,"screenDark":"yes"}',
     ]
     for (const raw of invalid) {
       expect(decodeControlMessage(raw)).toEqual({ ok: false, reason: 'invalid-shape' })
@@ -90,7 +95,7 @@ describe('control protocol', () => {
 
   it('accepts unknown battery support as null', () => {
     const raw =
-      '{"v":1,"id":"x","type":"status","battery":null,"charging":null,"fps":0,"width":0,"height":0,"bitrate":0,"audioLevel":0,"gain":0,"videoEnabled":false,"audioEnabled":false,"noiseSuppression":false,"autoGainControl":false}'
+      '{"v":1,"id":"x","type":"status","battery":null,"charging":null,"fps":0,"width":0,"height":0,"bitrate":0,"audioLevel":0,"gain":0,"videoEnabled":false,"audioEnabled":false,"noiseSuppression":false,"autoGainControl":false,"screenDark":false}'
     const result = decodeControlMessage(raw)
     expect(result.ok).toBe(true)
   })

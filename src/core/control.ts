@@ -44,6 +44,11 @@ export interface SetAudioMessage extends MessageBase, AudioSettings {
   type: 'set-audio'
 }
 
+export interface SetScreenMessage extends MessageBase {
+  type: 'set-screen'
+  dark: boolean
+}
+
 export interface StatusMessage extends MessageBase {
   type: 'status'
   battery: number | null
@@ -58,6 +63,7 @@ export interface StatusMessage extends MessageBase {
   audioEnabled: boolean
   noiseSuppression: boolean
   autoGainControl: boolean
+  screenDark: boolean
 }
 
 export type ControlMessage =
@@ -67,6 +73,7 @@ export type ControlMessage =
   | NegotiateMessage
   | SetVideoMessage
   | SetAudioMessage
+  | SetScreenMessage
   | StatusMessage
 
 export type DecodeFailure = 'too-large' | 'invalid-json' | 'invalid-shape' | 'unknown-type'
@@ -126,6 +133,10 @@ export function createSetVideo(settings: VideoSettings): SetVideoMessage {
 
 export function createSetAudio(settings: AudioSettings): SetAudioMessage {
   return { v: 1, id: makeId(), type: 'set-audio', ...settings }
+}
+
+export function createSetScreen(dark: boolean): SetScreenMessage {
+  return { v: 1, id: makeId(), type: 'set-screen', dark }
 }
 
 export type StatusInput = Omit<StatusMessage, 'v' | 'id' | 'type'>
@@ -216,6 +227,15 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
         },
       }
     }
+    case 'set-screen': {
+      if (typeof value.dark !== 'boolean') {
+        return { ok: false, reason: 'invalid-shape' }
+      }
+      return {
+        ok: true,
+        message: { v: 1, id: value.id, type: 'set-screen', dark: value.dark },
+      }
+    }
     case 'status': {
       if (
         !isNullableNumberInRange(value.battery, 0, 100) ||
@@ -229,7 +249,8 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
         typeof value.videoEnabled !== 'boolean' ||
         typeof value.audioEnabled !== 'boolean' ||
         typeof value.noiseSuppression !== 'boolean' ||
-        typeof value.autoGainControl !== 'boolean'
+        typeof value.autoGainControl !== 'boolean' ||
+        typeof value.screenDark !== 'boolean'
       ) {
         return { ok: false, reason: 'invalid-shape' }
       }
@@ -251,6 +272,7 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
           audioEnabled: value.audioEnabled,
           noiseSuppression: value.noiseSuppression,
           autoGainControl: value.autoGainControl,
+          screenDark: value.screenDark,
         },
       }
     }

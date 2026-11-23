@@ -5,15 +5,19 @@ import {
   createPing,
   createPong,
   createSetAudio,
+  createSetScreen,
   createSetVideo,
   createStatus,
   decodeControlMessage,
   encodeControlMessage,
   type ControlMessage,
   type SetAudioMessage,
+  type SetScreenMessage,
   type SetVideoMessage,
   type StatusMessage,
 } from '@/core/control'
+import { WebAudioAlarm } from '@/core/alarm'
+import { HeartbeatMonitor } from '@/core/heartbeat'
 import { ChildMediaController, stopStream } from '@/core/media-child'
 import {
   DEFAULT_AUDIO_SETTINGS,
@@ -24,6 +28,7 @@ import {
 import type { MediaStatus } from '@/core/media-stats'
 import type { NegotiationDescription } from '@/core/negotiation'
 import { PeerSession, type PeerRole } from '@/core/peer'
+import { enterAppFullscreen, exitAppFullscreen, ScreenWakeLock } from '@/core/power'
 import {
   decodeSignal,
   encodeSignal,
@@ -102,11 +107,25 @@ export function usePeerSession(role: PeerRole) {
   const mediaStatus = ref<MediaStatus | null>(null)
   const batteryLevel = ref<number | null>(null)
   const charging = ref<boolean | null>(null)
+  const screenDark = ref(false)
+  const alarmActive = ref(false)
+  const alarmMuted = ref(false)
+  const reconnecting = ref(false)
+  const wakeLockActive = ref(false)
+  const wakeLockSupported = ref(false)
+
+  const unlockAlarm = (): void => {
+    void alarm?.unlock()
+  }
+  if (role === 'parent') window.addEventListener('pointerdown', unlockAlarm, { once: true })
 
   let peer: PeerSession | null = null
   let media: ChildMediaController | null = null
   let statusTimer: ReturnType<typeof setInterval> | null = null
   let pingTimer: ReturnType<typeof setInterval> | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let reconnectTimer: ReturnType<typeof setInterval> | null = null
+  let reconnectAttempts = 0
   let statusInFlight = false
   let channel: RTCDataChannel | null = null
   let offerSdp = ''
@@ -117,6 +136,12 @@ export function usePeerSession(role: PeerRole) {
 
   const offerCollector = new SignalChunkCollector()
   const answerCollector = new SignalChunkCollector()
+  const heartbeat = new HeartbeatMonitor()
+  const alarm = role === 'parent' ? new WebAudioAlarm() : null
+  const wakeLock = new ScreenWakeLock(undefined, undefined, (active) => {
+    wakeLockActive.value = active
+  })
+  wakeLockSupported.value = wakeLock.supported
 
   function send(event: SessionEvent): void {
     const next = transition(state.value, event)
@@ -133,6 +158,79 @@ export function usePeerSession(role: PeerRole) {
     pingTimer = null
   }
 
+  function stopHeartbeat(): void {
+    if (heartbeatTimer) clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+    heartbeat.stop()
+  }
+
+  function startHeartbeat(): void {
+    stopHeartbeat()
+    heartbeat.start()
+    heartbeatTimer = setInterval(() => {
+      if (role === 'parent' && (state.value === 'connected' || state.value === 'degraded')) {
+        if (!heartbeat.isStale()) return
+        if (state.value === 'connected') {
+          send('degraded')
+          scheduleReconnect()
+        }
+        triggerAlarm()
+      }
+    }, 1000)
+  }
+
+  function clearAlarm(): void {
+    alarmActive.value = false
+    alarmMuted.value = false
+    alarm?.stop()
+  }
+
+  function triggerAlarm(): void {
+    if (role !== 'parent' || alarmActive.value) return
+    if (state.value !== 'connected' && state.value !== 'degraded') return
+    alarmActive.value = true
+    alarmMuted.value = false
+    alarm?.start()
+  }
+
+  function silenceAlarm(): void {
+    if (!alarmActive.value) return
+    alarmMuted.value = true
+    alarm?.stop()
+  }
+
+  function stopReconnect(): void {
+    if (reconnectTimer) clearInterval(reconnectTimer)
+    reconnectTimer = null
+    reconnectAttempts = 0
+    reconnecting.value = false
+  }
+
+  function attemptReconnect(): void {
+    if (state.value !== 'degraded' && state.value !== 'connected') {
+      stopReconnect()
+      return
+    }
+    if (reconnectAttempts >= 3) {
+      stopReconnect()
+      return
+    }
+    reconnectAttempts += 1
+    try {
+      peer?.restartIce()
+    } catch {
+      // The peer may already be closed; the state handler will finish the cleanup.
+    }
+  }
+
+  function scheduleReconnect(): void {
+    if (reconnectTimer) return
+    reconnecting.value = true
+    reconnectAttempts = 0
+    attemptReconnect()
+    reconnectTimer = setInterval(attemptReconnect, 4000)
+  }
+
   function startPingLoop(): void {
     stopPingLoop()
     void sendPing()
@@ -145,6 +243,13 @@ export function usePeerSession(role: PeerRole) {
     closedByUs = true
     stopStatusLoop()
     stopPingLoop()
+    stopHeartbeat()
+    stopReconnect()
+    void wakeLock.release()
+    if (screenDark.value) {
+      screenDark.value = false
+      void exitAppFullscreen()
+    }
     media?.stop()
     media = null
     if (peer) {
@@ -162,6 +267,7 @@ export function usePeerSession(role: PeerRole) {
     mediaStatus.value = null
     batteryLevel.value = null
     charging.value = null
+    rttMs.value = null
     videoSettings.value = { ...DEFAULT_VIDEO_SETTINGS }
     audioSettings.value = { ...DEFAULT_AUDIO_SETTINGS }
     volume.value = 1
@@ -181,6 +287,9 @@ export function usePeerSession(role: PeerRole) {
   }
 
   function fail(cause: unknown, fallback: string): void {
+    if (role === 'parent' && (state.value === 'connected' || state.value === 'degraded')) {
+      triggerAlarm()
+    }
     error.value = cause instanceof Error ? cause.message : fallback
     send('lost')
     cleanupPeer()
@@ -191,6 +300,11 @@ export function usePeerSession(role: PeerRole) {
     if (state.value === 'connecting') send('connected')
     else if (state.value === 'degraded') send('recovered')
     else return
+    stopReconnect()
+    clearAlarm()
+    startHeartbeat()
+    void wakeLock.acquire()
+    void alarm?.unlock()
     pairingProgress.value = null
     void refreshShortCode()
   }
@@ -239,7 +353,12 @@ export function usePeerSession(role: PeerRole) {
       if (channel?.readyState !== 'open') return
       channel.send(
         encodeControlMessage(
-          createStatus({ battery: battery.battery, charging: battery.charging, ...stats })
+          createStatus({
+            battery: battery.battery,
+            charging: battery.charging,
+            screenDark: screenDark.value,
+            ...stats,
+          })
         )
       )
     } catch {
@@ -310,6 +429,30 @@ export function usePeerSession(role: PeerRole) {
     volume.value = Math.min(1, Math.max(0, value))
   }
 
+  function setScreenDark(enabled: boolean): void {
+    if (role !== 'parent') return
+    screenDark.value = enabled
+    if (!sendControl(createSetScreen(enabled))) screenDark.value = !enabled
+  }
+
+  async function applySetScreen(message: SetScreenMessage): Promise<void> {
+    if (role !== 'child') return
+    screenDark.value = message.dark
+    if (message.dark) {
+      await enterAppFullscreen()
+    } else {
+      await exitAppFullscreen()
+    }
+    await sendStatus()
+  }
+
+  async function wakeScreen(): Promise<void> {
+    if (role !== 'child' || !screenDark.value) return
+    screenDark.value = false
+    await exitAppFullscreen()
+    await sendStatus()
+  }
+
   async function handleControl(raw: unknown): Promise<void> {
     const result = decodeControlMessage(raw)
     if (!result.ok) return
@@ -322,6 +465,9 @@ export function usePeerSession(role: PeerRole) {
       return
     }
     if (message.type === 'pong') {
+      heartbeat.markSeen()
+      if (alarmActive.value) clearAlarm()
+      if (state.value === 'degraded' && peerState.value === 'connected') maybeConnected()
       rttMs.value = Math.max(0, Math.round(performance.now() - message.t))
       return
     }
@@ -331,6 +477,10 @@ export function usePeerSession(role: PeerRole) {
     }
     if (message.type === 'set-audio') {
       if (role === 'child') await applySetAudio(message)
+      return
+    }
+    if (message.type === 'set-screen') {
+      if (role === 'child') await applySetScreen(message)
       return
     }
     if (message.type === 'status') {
@@ -350,6 +500,7 @@ export function usePeerSession(role: PeerRole) {
         }
         batteryLevel.value = status.battery
         charging.value = status.charging
+        screenDark.value = status.screenDark
       }
       return
     }
@@ -444,10 +595,14 @@ export function usePeerSession(role: PeerRole) {
         if (closedByUs) return
         peerState.value = nextState
         if (nextState === 'connected') {
+          stopReconnect()
           maybeConnected()
         } else if (nextState === 'disconnected') {
           send('degraded')
+          scheduleReconnect()
         } else if (nextState === 'failed' || nextState === 'closed') {
+          triggerAlarm()
+          stopReconnect()
           error.value = 'The connection was lost. Pair again.'
           send('lost')
           cleanupPeer()
@@ -474,6 +629,7 @@ export function usePeerSession(role: PeerRole) {
 
   async function startChild(): Promise<boolean> {
     if (state.value !== 'idle' && state.value !== 'lost') return false
+    clearAlarm()
     error.value = null
     pairingProgress.value = null
     cleanupPeer()
@@ -498,6 +654,7 @@ export function usePeerSession(role: PeerRole) {
       error.value = 'Start over before accepting another pairing code.'
       return false
     }
+    clearAlarm()
     error.value = null
 
     const collected = offerCollector.addMany(text)
@@ -594,6 +751,7 @@ export function usePeerSession(role: PeerRole) {
   }
 
   function reset(): void {
+    clearAlarm()
     cleanupPeer()
     send('reset')
     if (state.value !== 'idle') state.value = 'idle'
@@ -602,7 +760,13 @@ export function usePeerSession(role: PeerRole) {
     clearPairing()
   }
 
-  onBeforeUnmount(cleanupPeer)
+  onBeforeUnmount(() => {
+    if (role === 'parent') window.removeEventListener('pointerdown', unlockAlarm)
+    cleanupPeer()
+    clearAlarm()
+    void wakeLock.dispose()
+    void alarm?.dispose()
+  })
 
   return {
     state,
@@ -624,12 +788,21 @@ export function usePeerSession(role: PeerRole) {
     mediaStatus,
     batteryLevel,
     charging,
+    screenDark,
+    alarmActive,
+    alarmMuted,
+    reconnecting,
+    wakeLockActive,
+    wakeLockSupported,
     startChild,
     acceptOffer,
     acceptAnswer,
     updateVideoSettings,
     updateAudioSettings,
     setVolume,
+    setScreenDark,
+    wakeScreen,
+    silenceAlarm,
     reset,
   }
 }

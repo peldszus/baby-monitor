@@ -152,8 +152,65 @@ test.describe('pairing', () => {
         .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).volume))
         .toBe(0)
 
+      const darkToggle = parent.getByTestId('screen-dark-toggle').locator('input')
+      await darkToggle.click()
+      await expect(child.getByTestId('dark-screen')).toBeVisible({ timeout: 15_000 })
+      await expect(parent.getByTestId('screen-status')).toHaveText('Child screen dark')
+      await child.getByTestId('dark-screen').dblclick()
+      await expect(child.getByTestId('dark-screen')).toHaveCount(0)
+      await expect(parent.getByTestId('screen-status')).toHaveText('Child screen on')
+
       await expect(parent.getByTestId('error')).toHaveCount(0)
       await expect(child.getByTestId('error')).toHaveCount(0)
+    } finally {
+      await childContext.close()
+      await parentContext.close()
+    }
+  })
+
+  test('parent raises an alarm when the child connection disappears', async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    const childContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+    const parentContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+
+    try {
+      const child = await childContext.newPage()
+      const parent = await parentContext.newPage()
+
+      await child.goto('/#/child')
+      await child.getByTestId('start-child').click()
+      await child.getByText('Show text code instead').click()
+      const offerBox = child.getByTestId('offer-text').getByRole('textbox')
+      await expect.poll(() => offerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
+      const offer = await offerBox.inputValue()
+
+      await parent.goto('/#/parent')
+      await parent.getByText('Enter text code instead').click()
+      await parent.getByTestId('paste-input').getByRole('textbox').fill(offer)
+      await parent.getByTestId('submit-offer').click()
+      await parent.getByText('Show text code instead').click()
+      const answerBox = parent.getByTestId('answer-text').getByRole('textbox')
+      await expect.poll(() => answerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
+      const answer = await answerBox.inputValue()
+
+      await child.getByText('Enter answer manually').click()
+      await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
+      await child.getByTestId('submit-answer').click()
+
+      await expect(parent.getByTestId('connection-state')).toHaveText('Connected', {
+        timeout: 45_000,
+      })
+      await expect(parent.getByTestId('rtt')).toHaveText(/\d+ ms/, { timeout: 30_000 })
+      await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
+
+      await childContext.close()
+
+      await expect(parent.getByTestId('alarm-overlay')).toBeVisible({ timeout: 15_000 })
+      await parent.getByTestId('alarm-silence').click()
+      await expect(parent.getByTestId('alarm-muted')).toBeVisible()
+      await parent.getByTestId('alarm-stop').click()
+      await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
     } finally {
       await childContext.close()
       await parentContext.close()
