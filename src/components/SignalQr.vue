@@ -88,7 +88,8 @@ onBeforeUnmount(() => {
 }
 
 .qr-frame {
-  width: min(100%, 420px);
+  width: min(100%, 28vh, 340px);
+  width: min(100%, 28dvh, 340px);
   padding: 8px;
   border-radius: 12px;
   background: #fff;

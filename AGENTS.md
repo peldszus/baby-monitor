@@ -61,6 +61,8 @@ src/
     QrScanner.vue            # Camera dialog
     VideoStream.vue          # Attaches a MediaStream to a <video>
     ConnectionStatus.vue     # State, peer state and RTT
+    PairingSteps.vue         # Three-node pairing progress indicator
+    TextCodePanel.vue        # Collapsible text-code fallback
   views/
     HomeView.vue             # Role selection
     ChildView.vue            # Camera, offer QR, answer scan, local preview
@@ -108,6 +110,11 @@ that directory.
 - Parent playback volume uses the video element's `volume`. iOS may ignore it and use hardware
   volume instead; the UI still reflects the chosen value.
 - Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
+- Pairing uses one shared three-step indicator on both devices: child code, parent code and
+  connect. The child shows the offer then scans the answer; the parent scans the offer then shows
+  the answer. Text codes live in collapsed expansion panels so the QR flow stays above the fold.
+  Pairing views use compact spacing and a viewport-height QR size; E2E checks 320×568, 360×640 and
+  390×844 without page scrolling.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
 - Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
   pair and is near-white in the light theme, which is unreadable on the neutral panels.
@@ -128,12 +135,13 @@ Current milestone status:
 
 `e2e/pairing.spec.ts` starts Vite on `127.0.0.1:4173` and opens two isolated Chromium contexts. The
 launch flags supply fake camera/microphone input and disable mDNS host-candidate hiding, so the two
-contexts build a real WebRTC connection. The test drives the full offer/answer flow through the text
-fallback, asserts both codes are a single compact chunk, then checks that media is negotiated over
-the data channel, the parent receives video, both short codes match, and both devices show an
-automatic RTT. It also toggles video and audio, changes frame rate, resolution and bitrate, enables
-noise suppression
-and automatic gain, sets gain and volume, and verifies the child's tracks and reported status.
+contexts build a real WebRTC connection. The test opens the collapsible text fallback to drive the
+full offer/answer flow, asserts both codes are a single compact chunk, then checks that media is
+negotiated over the data channel, the parent receives video, both short codes match, and both
+devices show an automatic RTT. It also toggles video and audio, changes frame rate, resolution and
+bitrate, enables noise suppression and automatic gain, sets gain and volume, and verifies the
+child's tracks and reported status. Three additional cases check that the pairing screens do not
+scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
 `npx playwright install chromium`.

@@ -118,7 +118,8 @@ onBeforeUnmount(stop)
 
 .scanner-video {
   width: 100%;
-  min-height: 240px;
+  min-height: 180px;
+  max-height: 45dvh;
   border-radius: 12px;
   background: #000;
   object-fit: cover;

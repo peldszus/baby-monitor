@@ -1,4 +1,12 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function expectNoScroll(page: Page): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    const element = document.scrollingElement ?? document.documentElement
+    return element.scrollHeight - element.clientHeight
+  })
+  expect(overflow).toBeLessThanOrEqual(1)
+}
 
 test.describe('pairing', () => {
   test('child and parent connect, exchange media and ping', async ({ browser }) => {
@@ -12,8 +20,12 @@ test.describe('pairing', () => {
       const parent = await parentContext.newPage()
 
       await child.goto('/#/child')
+      await expect(child.getByTestId('step-1')).toHaveAttribute('aria-current', 'step')
       await child.getByTestId('start-child').click()
 
+      await expect(child.getByTestId('step-1')).toHaveClass(/done/)
+      await expect(child.getByTestId('step-2')).toHaveAttribute('aria-current', 'step')
+      await child.getByText('Show text code instead').click()
       const offerBox = child.getByTestId('offer-text').getByRole('textbox')
       await expect.poll(() => offerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
       const offer = await offerBox.inputValue()
@@ -24,9 +36,14 @@ test.describe('pairing', () => {
       await expect(child.getByTestId('qr-expiry')).toHaveText(/Valid for \d+s/)
 
       await parent.goto('/#/parent')
+      await expect(parent.getByTestId('step-1')).toHaveAttribute('aria-current', 'step')
+      await parent.getByText('Enter text code instead').click()
       await parent.getByTestId('paste-input').getByRole('textbox').fill(offer)
       await parent.getByTestId('submit-offer').click()
 
+      await expect(parent.getByTestId('step-1')).toHaveClass(/done/)
+      await expect(parent.getByTestId('step-2')).toHaveAttribute('aria-current', 'step')
+      await parent.getByText('Show text code instead').click()
       const answerBox = parent.getByTestId('answer-text').getByRole('textbox')
       await expect.poll(() => answerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
       const answer = await answerBox.inputValue()
@@ -34,6 +51,7 @@ test.describe('pairing', () => {
       expect(answer.length).toBeLessThan(400)
       await expect(parent.getByTestId('qr-code')).toBeVisible()
 
+      await child.getByText('Enter answer manually').click()
       await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
       await child.getByTestId('submit-answer').click()
 
@@ -141,4 +159,50 @@ test.describe('pairing', () => {
       await parentContext.close()
     }
   })
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 360, height: 640 },
+    { width: 320, height: 568 },
+  ]) {
+    test(`pairing fits without scrolling at ${viewport.width}x${viewport.height}`, async ({
+      browser,
+    }) => {
+      test.setTimeout(120_000)
+      const childContext = await browser.newContext({
+        permissions: ['camera', 'microphone'],
+        viewport,
+      })
+      const parentContext = await browser.newContext({
+        permissions: ['camera', 'microphone'],
+        viewport,
+      })
+
+      try {
+        const child = await childContext.newPage()
+        const parent = await parentContext.newPage()
+
+        await child.goto('/#/child')
+        await expectNoScroll(child)
+        await child.getByTestId('start-child').click()
+        await expect(child.getByTestId('qr-code')).toBeVisible({ timeout: 45_000 })
+        await expectNoScroll(child)
+
+        await parent.goto('/#/parent')
+        await expectNoScroll(parent)
+        await parent.getByText('Enter text code instead').click()
+        await child.getByText('Show text code instead').click()
+        const offer = await child.getByTestId('offer-text').getByRole('textbox').inputValue()
+        await parent.getByTestId('paste-input').getByRole('textbox').fill(offer)
+        await parent.getByTestId('submit-offer').click()
+
+        await expect(parent.getByTestId('qr-code')).toBeVisible({ timeout: 45_000 })
+        await expectNoScroll(parent)
+        await expect(child.getByTestId('pairing-steps')).toHaveAttribute('data-step', '2')
+      } finally {
+        await childContext.close()
+        await parentContext.close()
+      }
+    })
+  }
 })

@@ -12,13 +12,17 @@ two seconds. Wake locks, heartbeat alarms and presentation features are still to
 
 ## Pairing
 
-1. Open the app on the child device and choose **Child device**. Create the pairing code and show
-   it to the parent. The camera does not start yet.
-2. Open the app on the parent device and choose **Parent device**. Scan the child code, or paste
-   the text code. The parent shows an answer QR code.
-3. Scan or paste the answer on the child device. The data channel opens, then the child starts its
-   rear/main camera and negotiates audio and video over that channel. Both sides show the live
-   stream.
+1. Open the app on the child device and choose **Child device**, then tap **Generate pairing
+   code**. The child shows a QR code. The camera does not start yet.
+2. Open the app on the parent device and choose **Parent device**, then tap **Scan child's code**.
+   The parent shows an answer QR code.
+3. On the child, tap **Scan parent's answer** and scan that code. Both devices show a connecting
+   spinner while the data channel opens. The child then starts its rear/main camera and negotiates
+   audio and video; both sides show the live stream.
+
+A three-node indicator marks the child code, parent code and connection steps. Text codes are
+available under a collapsible fallback in each step, and the pairing screens are sized to avoid
+vertical scrolling on phone viewports.
 
 The QR code carries only the ICE credentials, DTLS fingerprint and host candidates; the rest of the
 data-channel SDP comes from a shared template. It is one small code per direction and expires after
