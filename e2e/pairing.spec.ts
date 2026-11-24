@@ -238,6 +238,10 @@ test.describe('pairing', () => {
 
       await expect(parent.getByTestId('error')).toHaveCount(0)
       await expect(child.getByTestId('error')).toHaveCount(0)
+
+      await child.getByText('Stop monitoring').click()
+      await expect(child.getByTestId('role-child')).toBeVisible()
+      await expect(child).toHaveURL(/#\/$/)
     } finally {
       await childContext.close()
       await parentContext.close()
@@ -322,6 +326,8 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('alarm-muted')).toBeVisible()
       await parent.getByTestId('alarm-stop').click()
       await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
+      await expect(parent.getByTestId('role-child')).toBeVisible()
+      await expect(parent).toHaveURL(/#\/$/)
       await expect
         .poll(() =>
           parent.evaluate(

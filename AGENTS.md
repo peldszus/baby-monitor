@@ -270,6 +270,14 @@ Hash-based routing (`#/`) is used for full GitHub Pages compatibility.
 
 - **Do not commit plans**: plans created in `.agents_tmp/` should never be committed. They are
   temporary working documents for the AI agent and should remain local-only.
-- `public/icon.svg` is the source for every app icon; regenerate the PNGs beside it when the
-  artwork changes. The maskable variant scales the artwork to 90% so it survives Android's
-  adaptive-icon crop.
+- `public/icon.svg` is the source for every app icon and for the home-screen hero. `HomeView`
+  loads that same file through `import.meta.env.BASE_URL`, so the installed app icon and the home
+  logo cannot drift. Regenerate the PNGs beside it when the artwork changes. The maskable variant
+  uses the same artwork; the glyph sits inside the central 50%, well within Android's safe zone.
+- The home role cards are single-action surfaces: icon plus `Use as child device` or
+  `Use as parent device`. Keep them keyboard-operable and avoid adding extra copy.
+- `Stop monitoring` resets the peer session and calls `router.replace('/')` on both role views.
+  `Start over` and `Cancel` stay inside the pairing flow because they restart pairing rather than
+  close a live stream.
+- `PairingSteps` has a small bottom margin so the step graph is not glued to the next panel. The
+  pairing views trim their outer padding to keep the 320×568 no-scroll test passing.

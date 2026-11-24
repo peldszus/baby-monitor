@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { mdiCellphone, mdiQrcodeScan } from '@mdi/js'
 import AlarmOverlay from '@/components/AlarmOverlay.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
@@ -10,6 +11,8 @@ import PresentationVideo from '@/components/PresentationVideo.vue'
 import TextCodePanel from '@/components/TextCodePanel.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
 import { BITRATE_OPTIONS, FPS_OPTIONS, RESOLUTION_OPTIONS } from '@/core/media-settings'
+
+const router = useRouter()
 
 const {
   state,
@@ -135,6 +138,11 @@ function startOver(): void {
   scannerOpen.value = false
   pasteText.value = ''
   reset()
+}
+
+function stopMonitoring(): void {
+  startOver()
+  void router.replace('/')
 }
 </script>
 
@@ -367,7 +375,7 @@ function startOver(): void {
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
       </section>
-      <v-btn variant="text" block @click="startOver">Stop monitoring</v-btn>
+      <v-btn variant="text" block @click="stopMonitoring">Stop monitoring</v-btn>
     </template>
 
     <section v-else-if="channelOpen" class="panel connecting-panel">
@@ -387,7 +395,7 @@ function startOver(): void {
       :muted="alarmMuted"
       :reconnecting="reconnecting"
       @silence="silenceAlarm"
-      @stop="startOver"
+      @stop="stopMonitoring"
     />
   </div>
 </template>
@@ -403,7 +411,7 @@ function startOver(): void {
 }
 
 .view.pairing {
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
   gap: 8px;
 }
 

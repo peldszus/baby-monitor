@@ -26,8 +26,9 @@ describe('HomeView', () => {
     })
 
     expect(wrapper.get('h1').text()).toBe('Baby Monitor')
-    expect(wrapper.get('[data-testid="role-child"]').text()).toContain('child')
-    expect(wrapper.get('[data-testid="role-parent"]').text()).toContain('parent')
+    expect(wrapper.get('.hero-icon').attributes('src')).toContain('icon.svg')
+    expect(wrapper.get('[data-testid="role-child"]').text()).toContain('Use as child device')
+    expect(wrapper.get('[data-testid="role-parent"]').text()).toContain('Use as parent device')
     expect(wrapper.get('[data-testid="role-parent"]').classes()).toEqual(
       wrapper.get('[data-testid="role-child"]').classes()
     )

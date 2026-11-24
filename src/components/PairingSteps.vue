@@ -40,7 +40,7 @@ function isCurrent(index: number): boolean {
 .steps {
   position: relative;
   display: flex;
-  margin: 0;
+  margin: 0 0 8px;
   padding: 0;
   list-style: none;
 }
