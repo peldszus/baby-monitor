@@ -3,7 +3,7 @@
 A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR code, then send
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
-The current build covers Milestones 0, 1, 2, 3 and 4 from the
+The current build covers Milestones 0, 1, 2, 3, 4 and 5 from the
 [concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
 media negotiated over that encrypted channel, parent controls for video, audio, frame rate,
 resolution, bitrate, microphone gain, noise suppression, automatic gain and volume, operation
@@ -14,6 +14,8 @@ M3 adds a screen Wake Lock, a black fullscreen child display that the parent can
 parent alarm after six seconds without a heartbeat, and automatic ICE restart attempts while the
 data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning and
 Picture-in-Picture, including a canvas pipeline that keeps the transformed view in the PiP window.
+M5 adds an install prompt, offline app-shell caching, CSP and referrer meta tags, recommended
+security headers for header-capable hosts, and dependency-audit/PWA checks in CI.
 
 ## Pairing
 
@@ -67,6 +69,34 @@ the home screen.
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation.
 
+## Install and offline use
+
+The home screen offers **Install Baby Monitor** when the browser fires
+`beforeinstallprompt`. The installed app opens standalone and its app shell, fonts and icons are
+precached by the service worker. Reloading while offline still shows the home screen and both role
+buttons. Pairing and media need a live connection, so monitoring cannot start offline.
+
+On iPhone and iPad, Safari does not expose an install prompt; use **Share → Add to Home Screen**.
+The home screen shows the same hint when it detects an iOS browser.
+
+## Security headers
+
+GitHub Pages cannot set custom response headers. The app therefore sets a Content-Security-Policy
+and `Referrer-Policy: no-referrer` through `<meta>` tags in `index.html`. The policy allows only
+same-origin scripts, fonts and connections, plus inline styles for Vuetify's runtime theme and
+blob/data URLs for canvas and media. It does not allow `unsafe-eval`.
+
+`public/_headers` contains the stricter response-header set for hosts that support it, including
+Cloudflare Pages and Netlify: CSP with `frame-ancestors 'none'`, HSTS, Permissions-Policy,
+`X-Content-Type-Options`, and cross-origin policies. GitHub Pages serves this file as static text
+and ignores it. Moving to a header-capable host is required for HSTS and a real
+`Permissions-Policy` header.
+
+`npm run audit` checks production dependencies for critical advisories. The current lockfile has
+moderate and high advisories against the Vite development server's esbuild dependency; they do not
+affect the built app and would require a breaking Vite major upgrade. CI fails only on critical
+advisories and prints the rest.
+
 ## Long-running operation
 
 - Both devices request a screen Wake Lock while monitoring and re-request it when the page becomes
@@ -96,18 +126,20 @@ npm install
 npm run dev
 ```
 
-| Command                 | Description                                |
-| ----------------------- | ------------------------------------------ |
-| `npm run dev`           | Start dev server at http://localhost:5173  |
-| `npm run build`         | Type-check then build for production       |
-| `npm run preview`       | Preview production build                   |
-| `npm run format`        | Rewrite all files with Prettier            |
-| `npm run format:check`  | Check formatting without rewriting         |
-| `npm run lint`          | Run ESLint on all files                    |
-| `npm run type-check`    | Run vue-tsc on all source files            |
-| `npm run test`          | Run Vitest unit tests                      |
-| `npm run test:coverage` | Run unit tests with V8 coverage            |
-| `npm run test:e2e`      | Run the Playwright two-device pairing test |
+| Command                 | Description                                       |
+| ----------------------- | ------------------------------------------------- |
+| `npm run dev`           | Start dev server at http://localhost:5173         |
+| `npm run build`         | Type-check then build for production              |
+| `npm run preview`       | Preview production build                          |
+| `npm run format`        | Rewrite all files with Prettier                   |
+| `npm run format:check`  | Check formatting without rewriting                |
+| `npm run lint`          | Run ESLint on all files                           |
+| `npm run type-check`    | Run vue-tsc on all source files                   |
+| `npm run test`          | Run Vitest unit tests                             |
+| `npm run test:coverage` | Run unit tests with V8 coverage                   |
+| `npm run test:e2e`      | Run the Playwright two-device pairing test        |
+| `npm run test:pwa`      | Build, preview and test the offline PWA shell     |
+| `npm run audit`         | Audit production dependencies for critical issues |
 
 Install the Playwright browser once before running E2E tests:
 
@@ -120,7 +152,8 @@ npx playwright install chromium
 Every push to `main` builds with `VITE_BASE_URL=/baby-monitor/` and publishes to the root of the
 `gh-pages` branch. Every push to another branch builds with
 `VITE_BASE_URL=/baby-monitor/staging/` and publishes to the `staging/` folder on the same branch.
-Both workflows share a `github-pages` concurrency group.
+Both workflows share a `github-pages` concurrency group. CI also runs the production PWA test
+against a real service worker and the offline shell, plus the dependency audit.
 
 GitHub Pages is already configured for this repository (Settings → Pages → Source →
 `gh-pages` branch). A fork must enable it once.

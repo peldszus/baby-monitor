@@ -174,6 +174,9 @@ Current milestone status:
   restart attempts and a clear pairing prompt when recovery fails.
 - **M4 (presentation):** complete — 90° rotation, 1–4× digital zoom, drag/pinch panning, reset,
   native Picture-in-Picture at identity and canvas PiP for transformed views.
+- **M5 (PWA/hardening):** complete — install prompt and iOS hint, precached offline shell,
+  CSP/referrer meta tags, recommended headers for header-capable hosts, dependency audit and a
+  production PWA E2E job.
 
 ## End-to-End Tests
 
@@ -189,7 +192,9 @@ verifies the child's tracks and reported status. A separate case closes the chil
 checks that the parent alarm appears, can be silenced and can be stopped. Three additional cases
 check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
-scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
+scanner, including the jsQR fallback when `BarcodeDetector` throws. `e2e/pwa.spec.ts` runs against
+`vite preview` with service workers enabled, checks PWA metadata and the install prompt, then goes
+offline and reloads the cached app shell. Install the browser once with
 `npx playwright install chromium`.
 
 ## Design System
@@ -213,8 +218,10 @@ Every commit runs via the Husky pre-commit hook:
 3. `npm run type-check` — vue-tsc on all source files
 4. `npm run test:coverage` — all Vitest tests with coverage
 
-CI runs the same steps on every push, plus a final `npm run build`. A separate `e2e` job installs
-Chromium and runs the Playwright pairing test, uploading `test-results/` when it fails.
+CI runs the same steps on every push, plus `npm run build` and `npm run audit`. A separate
+`e2e` job installs Chromium and runs the Playwright pairing test, uploading `test-results/` when it
+fails. A `pwa` job builds the production bundle, serves it with `vite preview`, and checks the
+manifest, CSP meta tag, install prompt and offline app shell against a real service worker.
 
 ## Deployment
 
@@ -235,6 +242,23 @@ so they never push to `gh-pages` at the same time.
 GitHub Pages must be configured once in repo Settings → Pages → Source → `gh-pages` branch.
 
 Hash-based routing (`#/`) is used for full GitHub Pages compatibility.
+
+## PWA and Security Headers
+
+- `src/composables/useInstallPrompt.ts` captures `beforeinstallprompt`, exposes the install action
+  and remembers a dismissal in localStorage. `HomeView` shows the install card, or an iOS
+  Share → Add to Home Screen hint when the browser has no install prompt.
+- VitePWA precaches JS, CSS, HTML, fonts, icons and the web manifest. The production PWA test
+  reloads with the browser offline and asserts the home screen still renders.
+- `index.html` sets a CSP meta tag. GitHub Pages cannot send response headers, so HSTS and
+  Permissions-Policy are not enforceable there. `public/_headers` documents the stricter set for
+  Cloudflare Pages, Netlify or another header-capable host; it is inert on GitHub Pages.
+- The CSP allows `'unsafe-inline'` styles because Vuetify injects theme CSS at runtime. Scripts and
+  connections stay same-origin, with `ws:`/`wss:` only for Vite HMR in development. Do not add
+  remote script, font or analytics origins.
+- `npm run audit` fails CI only on critical production advisories. Known moderate and high
+  Vite/esbuild development-server advisories remain until a breaking Vite major upgrade is
+  scheduled.
 
 ## Environment Variables
 

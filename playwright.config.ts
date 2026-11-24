@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  // The PWA spec needs the built app and service workers; run it with
+  // playwright.pwa.config.ts instead of the dev-server suite.
+  testIgnore: /pwa\.spec\.ts/,
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
