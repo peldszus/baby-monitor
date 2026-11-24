@@ -6,8 +6,8 @@ import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import PairingSteps from '@/components/PairingSteps.vue'
 import QrScanner from '@/components/QrScanner.vue'
 import SignalQr from '@/components/SignalQr.vue'
+import PresentationVideo from '@/components/PresentationVideo.vue'
 import TextCodePanel from '@/components/TextCodePanel.vue'
-import VideoStream from '@/components/VideoStream.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
 import { BITRATE_OPTIONS, FPS_OPTIONS, RESOLUTION_OPTIONS } from '@/core/media-settings'
 
@@ -208,10 +208,11 @@ function startOver(): void {
         :wake-lock-active="wakeLockActive"
         :wake-lock-supported="wakeLockSupported"
       />
-      <VideoStream
+      <PresentationVideo
         :stream="remoteStream"
         :volume="volume"
         :muted="!audioSettings.enabled"
+        :warning="state === 'degraded'"
         test-id="remote-video"
       />
 

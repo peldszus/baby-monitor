@@ -69,6 +69,17 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('send-ping')).toHaveCount(0)
       await expect(child.getByTestId('send-ping')).toHaveCount(0)
 
+      await parent.evaluate(() => {
+        const state = { draws: 0 }
+        Object.defineProperty(window, '__canvasDraws', { value: state, configurable: true })
+        const proto = CanvasRenderingContext2D.prototype
+        const original = proto.drawImage
+        proto.drawImage = function (this: CanvasRenderingContext2D, ...args: unknown[]) {
+          state.draws += 1
+          return original.apply(this, args as never)
+        }
+      })
+
       const remoteVideo = parent.getByTestId('remote-video')
       await expect
         .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).videoWidth), {
@@ -154,6 +165,68 @@ test.describe('pairing', () => {
       await expect
         .poll(() => remoteVideo.evaluate((element) => (element as HTMLVideoElement).volume))
         .toBe(0)
+
+      const stage = parent.getByTestId('presentation-stage')
+      await expect(stage).toHaveAttribute('data-rotation', '0')
+      await parent.getByTestId('rotate-right').click()
+      await expect(stage).toHaveAttribute('data-rotation', '90')
+      await expect(parent.getByTestId('presentation-canvas')).toBeVisible()
+
+      const zoom = parent.getByTestId('zoom-slider').getByRole('slider')
+      await zoom.focus()
+      await zoom.press('End')
+      await expect(stage).toHaveAttribute('data-zoom', '4.00')
+
+      const box = await stage.boundingBox()
+      if (!box) throw new Error('Presentation stage has no bounding box.')
+      await parent.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await parent.mouse.down()
+      await parent.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 4 })
+      await parent.mouse.up()
+      await expect(stage).not.toHaveAttribute('data-pan-x', '0.000')
+
+      await expect(stage).toHaveAttribute('data-pip', 'none')
+      await parent.getByTestId('pip-button').click()
+      await expect(stage).toHaveAttribute('data-pip', 'canvas', { timeout: 15_000 })
+
+      const drawsBefore = await parent.evaluate(
+        () => (window as unknown as { __canvasDraws: { draws: number } }).__canvasDraws.draws
+      )
+      await parent.evaluate(() => {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          get: () => 'hidden',
+        })
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await expect
+        .poll(
+          () =>
+            parent.evaluate(
+              () => (window as unknown as { __canvasDraws: { draws: number } }).__canvasDraws.draws
+            ),
+          { timeout: 10_000 }
+        )
+        .toBeGreaterThan(drawsBefore + 2)
+      await parent.evaluate(() => {
+        delete (document as unknown as { visibilityState?: string }).visibilityState
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      await expect(stage).toHaveAttribute('data-pip', 'canvas')
+
+      await parent.getByTestId('pip-button').click()
+      await expect(stage).toHaveAttribute('data-pip', 'none')
+
+      await parent.getByTestId('reset-presentation').click()
+      await expect(stage).toHaveAttribute('data-rotation', '0')
+      await expect(stage).toHaveAttribute('data-zoom', '1.00')
+      await expect(stage).toHaveAttribute('data-pan-x', '0.000')
+      await expect(parent.getByTestId('presentation-canvas')).toBeHidden()
+
+      await parent.getByTestId('pip-button').click()
+      await expect(stage).toHaveAttribute('data-pip', 'standard', { timeout: 15_000 })
+      await parent.getByTestId('pip-button').click()
+      await expect(stage).toHaveAttribute('data-pip', 'none')
 
       const darkToggle = parent.getByTestId('screen-dark-toggle').locator('input')
       await darkToggle.click()

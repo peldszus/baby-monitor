@@ -49,6 +49,7 @@ src/
     heartbeat.ts             # Six-second heartbeat timeout evaluator
     alarm.ts                 # Web Audio warning tone with user-gesture unlock
     power.ts                 # Screen Wake Lock and fullscreen helpers
+    presentation.ts          # Parent rotation, zoom and pan math
     signaling-qr.ts          # Compact handshake codec, full-SDP fallback, CRC-32 and expiry
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
     negotiation.ts           # Perfect negotiation for media over the data channel
@@ -63,6 +64,7 @@ src/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
     VideoStream.vue          # Attaches a MediaStream to a <video>
+    PresentationVideo.vue    # Parent canvas presentation, gestures and PiP
     ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
     AlarmOverlay.vue         # Fullscreen parent warning when the connection fails
     PairingSteps.vue         # Three-node pairing progress indicator
@@ -136,6 +138,22 @@ that directory.
   seconds apart, while the data channel can still carry the negotiation. If the channel closes or
   the restart fails, the session moves to `lost`, the parent alarm stays visible, and the UI asks
   for a new pairing.
+- M4 presentation: the parent keeps rotation, zoom and normalized pan in `presentation.ts`.
+  Rotation is limited to 90° steps, zoom to 1–4×, and pan to ±1 of the maximum range. The native
+  video is shown when the view is unmodified. Once transformed, `PresentationVideo` redraws the
+  video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface.
+- Native PiP is requested on the main video at identity. For a transformed view,
+  `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
+  on a hidden video. Switching between identity and transformed views closes PiP; the user starts
+  it again. Canvas PiP draws a connection warning into the frame while degraded.
+- Hidden-page canvas PiP must not rely on `requestAnimationFrame`: browsers pause it. While the
+  page is hidden and canvas PiP is active, `PresentationVideo` reads remote video frames through
+  `MediaStreamTrackProcessor` and draws them, with a 15 fps timer and `requestVideoFrameCallback`
+  fallback. The source video also stays full-size behind the canvas so the browser does not treat
+  it as a tiny hidden element. This prevents the Android PiP window from freezing when the app
+  goes to the home screen.
+- Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
+  resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
 - Secondary text uses `on-surface-muted`. Vuetify's `on-surface-variant` is M3's inverse-surface
   pair and is near-white in the light theme, which is unreadable on the neutral panels.
@@ -154,6 +172,8 @@ Current milestone status:
 - **M3 (operation):** complete — screen Wake Lock with visibility reacquisition, parent-controlled
   black fullscreen child display, six-second heartbeat alarm with Web Audio warning, automatic ICE
   restart attempts and a clear pairing prompt when recovery fails.
+- **M4 (presentation):** complete — 90° rotation, 1–4× digital zoom, drag/pinch panning, reset,
+  native Picture-in-Picture at identity and canvas PiP for transformed views.
 
 ## End-to-End Tests
 
@@ -163,10 +183,11 @@ contexts build a real WebRTC connection. The test opens the collapsible text fal
 full offer/answer flow, asserts both codes are a single compact chunk, then checks that media is
 negotiated over the data channel, the parent receives video, both short codes match, and both
 devices show an automatic RTT. It also toggles video and audio, changes frame rate, resolution and
-bitrate, enables noise suppression and automatic gain, sets gain and volume, toggles the child's
-dark screen, and verifies the child's tracks and reported status. A separate case closes the child
-context and checks that the parent alarm appears, can be silenced and can be stopped. Three
-additional cases check that the pairing screens do not scroll at phone viewport sizes.
+bitrate, enables noise suppression and automatic gain, sets gain and volume, rotates, zooms,
+pans, resets the presentation, opens native and canvas PiP, toggles the child's dark screen, and
+verifies the child's tracks and reported status. A separate case closes the child context and
+checks that the parent alarm appears, can be silenced and can be stopped. Three additional cases
+check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. Install the browser once with
 `npx playwright install chromium`.

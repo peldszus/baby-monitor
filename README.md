@@ -3,16 +3,17 @@
 A serverless, browser-only baby monitor PWA. Two devices pair by exchanging a QR code, then send
 and receive video and audio over a direct, encrypted WebRTC connection on the local network.
 
-The current build covers Milestones 0, 1, 2 and 3 from the
+The current build covers Milestones 0, 1, 2, 3 and 4 from the
 [concept](docs/babyphone-concept.md): a compact data-channel handshake by QR code or copy/paste,
 media negotiated over that encrypted channel, parent controls for video, audio, frame rate,
-resolution, bitrate, microphone gain, noise suppression, automatic gain and volume, and operation
-features for long-running use. The child reports the values that actually took effect. Both
-devices exchange an automatic RTT ping every two seconds.
+resolution, bitrate, microphone gain, noise suppression, automatic gain and volume, operation
+features for long-running use, and parent presentation controls. The child reports the values that
+actually took effect. Both devices exchange an automatic RTT ping every two seconds.
 
 M3 adds a screen Wake Lock, a black fullscreen child display that the parent can switch on, a loud
 parent alarm after six seconds without a heartbeat, and automatic ICE restart attempts while the
-data channel still works. Presentation features (rotation, pan/zoom, PiP) are still to come.
+data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning and
+Picture-in-Picture, including a canvas pipeline that keeps the transformed view in the PiP window.
 
 ## Pairing
 
@@ -43,6 +44,25 @@ The child stops the camera or microphone track when it is switched off, so the c
 out. The parent also has a playback volume slider; on iOS the hardware volume may still be the
 effective control. Each device pings the other every two seconds and shows the latest round-trip
 time next to the connection state.
+
+### Parent presentation
+
+The parent video has rotate-left and rotate-right buttons, a 1–4× zoom slider, drag or pinch
+panning, and a reset button. Rotation and zoom use a canvas renderer so the displayed region and
+the PiP stream stay identical. Digital zoom only enlarges existing pixels; for a strong zoom,
+raise the child resolution in the camera controls first.
+
+The Picture-in-Picture button uses the browser's native video PiP when the view is unmodified. When
+the view is rotated, zoomed or panned, the canvas is captured with `captureStream()`, the remote
+audio track is attached, and that stream is shown in PiP. Transform changes while native PiP is
+active close PiP so the new view can be started again. PiP support and behavior vary by browser;
+the button is disabled with a short explanation when the API is unavailable.
+
+When the parent app goes to the background, the canvas keeps drawing from the remote video track
+instead of relying only on `requestAnimationFrame`, which browsers pause for hidden pages. A
+`MediaStreamTrackProcessor` drives the frames where available, with a timer and
+`requestVideoFrameCallback` fallback. This keeps the transformed PiP window live when you return to
+the home screen.
 
 No STUN or TURN server is used, so both devices must be on the same local network without client
 isolation.
