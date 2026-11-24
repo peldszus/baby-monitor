@@ -1,10 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Baby monitor">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Baby bed">
   <rect width="512" height="512" fill="#B3EBFB" />
-  <rect x="96" y="112" width="320" height="256" rx="48" fill="#2E6171" />
-  <rect x="128" y="144" width="256" height="160" rx="24" fill="#F7FAFB" />
-  <circle cx="256" cy="224" r="48" fill="#2E6171" />
-  <circle cx="256" cy="224" r="24" fill="#97CFE1" />
-  <circle cx="241" cy="209" r="8" fill="#F7FAFB" />
-  <rect x="232" y="368" width="48" height="32" fill="#2E6171" />
-  <rect x="160" y="400" width="192" height="32" rx="16" fill="#2E6171" />
+  <g transform="translate(128 128) scale(10.666667)" fill="#2E6171">
+    <path d="M18 9H12V4H8C5.8 4 4 5.8 4 8V14C4 15.1 4.9 16 6 16H8V18.9C7.4 18.5 6.8 18.1 6.3 17.6L4.9 19C6.7 20.9 9.2 22 12 22S17.3 20.9 19.1 19.1L17.7 17.7C17.2 18.2 16.7 18.6 16.1 19V16H18.1C19.2 16 20.1 15.1 20.1 14V11C20 9.9 19.1 9 18 9M14 19.8C13.4 20 12.7 20 12 20S10.6 19.9 10 19.8V16H14V19.8Z" />
+  </g>
 </svg>
