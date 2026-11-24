@@ -1,11 +1,30 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { mdiBabyCarriage, mdiCameraOutline, mdiCellphone } from '@mdi/js'
+import {
+  mdiBabyCarriage,
+  mdiCameraOutline,
+  mdiCellphone,
+  mdiCellphoneArrowDown,
+  mdiShareVariant,
+} from '@mdi/js'
+import { useInstallPrompt } from '@/composables/useInstallPrompt'
 
 const router = useRouter()
+const { canInstall, isIos, install, dismiss } = useInstallPrompt()
+const installing = ref(false)
 
 function choose(path: string): void {
   void router.push(path)
+}
+
+async function installApp(): Promise<void> {
+  installing.value = true
+  try {
+    await install()
+  } finally {
+    installing.value = false
+  }
 }
 </script>
 
@@ -20,6 +39,44 @@ function choose(path: string): void {
         A calm, private place to keep an eye and an ear on your little one.
       </p>
     </section>
+
+    <v-card
+      v-if="canInstall"
+      variant="flat"
+      color="surface-container-high"
+      class="install-card"
+      data-testid="install-prompt"
+    >
+      <v-card-item>
+        <template #prepend>
+          <v-icon :icon="mdiCellphoneArrowDown" color="primary" />
+        </template>
+        <v-card-title class="text-subtitle-1">Install Baby Monitor</v-card-title>
+        <v-card-subtitle>Full screen and available offline.</v-card-subtitle>
+      </v-card-item>
+      <v-card-actions>
+        <v-btn color="primary" :loading="installing" data-testid="install-app" @click="installApp">
+          Install
+        </v-btn>
+        <v-btn variant="text" data-testid="dismiss-install" @click="dismiss">Not now</v-btn>
+      </v-card-actions>
+    </v-card>
+
+    <v-card
+      v-else-if="isIos"
+      variant="flat"
+      color="surface-container"
+      class="install-card"
+      data-testid="install-ios-hint"
+    >
+      <v-card-item>
+        <template #prepend>
+          <v-icon :icon="mdiShareVariant" color="primary" />
+        </template>
+        <v-card-title class="text-subtitle-1">Add to Home Screen</v-card-title>
+        <v-card-subtitle>Safari: Share → Add to Home Screen.</v-card-subtitle>
+      </v-card-item>
+    </v-card>
 
     <div class="roles">
       <v-card variant="flat" color="surface-container" class="role-card">
@@ -101,6 +158,11 @@ function choose(path: string): void {
   .roles {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.install-card {
+  display: flex;
+  flex-direction: column;
 }
 
 .role-card {

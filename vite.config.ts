@@ -14,9 +14,13 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'favicon-96.png', 'apple-touch-icon.png'],
       manifest: {
+        id: '.',
         name: 'Baby Monitor',
         short_name: 'BabyMonitor',
         description: 'Keep an eye and an ear on your little one',
+        lang: 'en',
+        dir: 'ltr',
+        prefer_related_applications: false,
         // Matches the light theme's surface colour from src/theme.ts.
         theme_color: '#F7FAFB',
         background_color: '#F7FAFB',
@@ -39,9 +43,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         // woff2 must be listed or the self-hosted Roboto is not precached and the app
         // falls back to a system font when offline.
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
       },
     }),
   ],
