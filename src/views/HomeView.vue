@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  mdiBabyCarriage,
-  mdiCameraOutline,
-  mdiCellphone,
-  mdiCellphoneArrowDown,
-  mdiShareVariant,
-} from '@mdi/js'
+import { mdiCameraOutline, mdiCellphone, mdiCellphoneArrowDown, mdiShareVariant } from '@mdi/js'
 import { useInstallPrompt } from '@/composables/useInstallPrompt'
 
 const router = useRouter()
 const { canInstall, isIos, install, dismiss } = useInstallPrompt()
 const installing = ref(false)
+const iconUrl = `${import.meta.env.BASE_URL}icon.svg`
 
 function choose(path: string): void {
   void router.push(path)
@@ -31,9 +26,7 @@ async function installApp(): Promise<void> {
 <template>
   <div class="home">
     <section class="hero">
-      <div class="hero-icon">
-        <v-icon :icon="mdiBabyCarriage" size="48" color="primary" />
-      </div>
+      <img :src="iconUrl" alt="" class="hero-icon" />
       <h1 class="text-h5">Baby Monitor</h1>
       <p class="text-body-1 text-medium-emphasis">
         A calm, private place to keep an eye and an ear on your little one.
@@ -79,34 +72,42 @@ async function installApp(): Promise<void> {
     </v-card>
 
     <div class="roles">
-      <v-card variant="flat" color="surface-container" class="role-card">
+      <v-card
+        variant="flat"
+        color="surface-container"
+        class="role-card"
+        data-testid="role-child"
+        role="button"
+        tabindex="0"
+        @click="choose('/child')"
+        @keydown.enter="choose('/child')"
+        @keydown.space.prevent="choose('/child')"
+      >
         <v-card-item>
           <template #prepend>
             <v-icon :icon="mdiCameraOutline" color="primary" />
           </template>
-          <v-card-title class="text-subtitle-1">Child device</v-card-title>
-          <v-card-subtitle>Sends video and audio. Leave it with your little one.</v-card-subtitle>
+          <v-card-title class="text-subtitle-1">Use as child device</v-card-title>
         </v-card-item>
-        <v-card-actions>
-          <v-btn block color="primary" data-testid="role-child" @click="choose('/child')">
-            Use as child device
-          </v-btn>
-        </v-card-actions>
       </v-card>
 
-      <v-card variant="flat" color="surface-container" class="role-card">
+      <v-card
+        variant="flat"
+        color="surface-container"
+        class="role-card"
+        data-testid="role-parent"
+        role="button"
+        tabindex="0"
+        @click="choose('/parent')"
+        @keydown.enter="choose('/parent')"
+        @keydown.space.prevent="choose('/parent')"
+      >
         <v-card-item>
           <template #prepend>
             <v-icon :icon="mdiCellphone" color="primary" />
           </template>
-          <v-card-title class="text-subtitle-1">Parent device</v-card-title>
-          <v-card-subtitle>Receives video and audio. Keep it with you.</v-card-subtitle>
+          <v-card-title class="text-subtitle-1">Use as parent device</v-card-title>
         </v-card-item>
-        <v-card-actions>
-          <v-btn block color="primary" data-testid="role-parent" @click="choose('/parent')">
-            Use as parent device
-          </v-btn>
-        </v-card-actions>
       </v-card>
     </div>
 
@@ -136,13 +137,11 @@ async function installApp(): Promise<void> {
 }
 
 .hero-icon {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 96px;
   height: 96px;
   margin-bottom: 8px;
   border-radius: 50%;
-  background: rgb(var(--v-theme-primary-container));
 }
 
 .hero p {
@@ -166,12 +165,17 @@ async function installApp(): Promise<void> {
 }
 
 .role-card {
-  display: flex;
-  flex-direction: column;
+  cursor: pointer;
+  transition: background-color 150ms ease;
 }
 
-.role-card :deep(.v-card-actions) {
-  margin-top: auto;
+.role-card:hover {
+  background: rgb(var(--v-theme-surface-container-high));
+}
+
+.role-card:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 
 .disclaimer {

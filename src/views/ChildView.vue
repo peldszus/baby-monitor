@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import PairingSteps from '@/components/PairingSteps.vue'
@@ -8,6 +9,8 @@ import SignalQr from '@/components/SignalQr.vue'
 import TextCodePanel from '@/components/TextCodePanel.vue'
 import VideoStream from '@/components/VideoStream.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
+
+const router = useRouter()
 
 const {
   state,
@@ -102,6 +105,11 @@ function startOver(): void {
   answerMode.value = false
   pasteText.value = ''
   reset()
+}
+
+function stopMonitoring(): void {
+  startOver()
+  void router.replace('/')
 }
 
 let wakePressTimer: ReturnType<typeof setTimeout> | null = null
@@ -242,7 +250,7 @@ onBeforeUnmount(cancelWakePress)
         <p>Compare this code on both devices:</p>
         <div class="short-code" data-testid="short-code">{{ shortCode }}</div>
       </section>
-      <v-btn variant="text" block @click="startOver">Stop monitoring</v-btn>
+      <v-btn variant="text" block @click="stopMonitoring">Stop monitoring</v-btn>
     </template>
 
     <p class="disclaimer">This app is not a medical device and does not replace supervision.</p>
@@ -286,7 +294,7 @@ onBeforeUnmount(cancelWakePress)
 }
 
 .view.pairing {
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
   gap: 8px;
 }
 
