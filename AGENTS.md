@@ -154,6 +154,11 @@ that directory.
   fallback. The source video also stays full-size behind the canvas so the browser does not treat
   it as a tiny hidden element. This prevents the Android PiP window from freezing when the app
   goes to the home screen.
+- Fullscreen requests the presentation stage with `requestFullscreen`, falls back to
+  `webkitEnterFullscreen` on the video for iOS, and finally keeps a fixed in-app overlay. The
+  `fullscreenchange` and WebKit fullscreen events keep `fullscreen`/`fullscreenMode` in sync, the
+  exit button lives inside the stage, and body scrolling is locked while active. Entering
+  fullscreen exits PiP first.
 - Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
   resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
@@ -189,9 +194,10 @@ full offer/answer flow, asserts both codes are a single compact chunk, then chec
 negotiated over the data channel, the parent receives video, both short codes match, and both
 devices show an automatic RTT. It also toggles video and audio, changes frame rate, resolution and
 bitrate, enables noise suppression and automatic gain, sets gain and volume, rotates, zooms,
-pans, resets the presentation, opens native and canvas PiP, toggles the child's dark screen, and
-verifies the child's tracks and reported status. A separate case closes the child context and
-checks that the parent alarm appears, can be silenced and can be stopped. Another dispatches
+pans, resets the presentation, enters and leaves fullscreen, opens native and canvas PiP, toggles
+the child's dark screen, and verifies the child's tracks and reported status. A separate case
+closes the child context and checks that the parent alarm appears, can be silenced and can be
+stopped. Another dispatches
 `pagehide` on the parent and checks that the child returns to pairing without an error. Three
 additional cases check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic

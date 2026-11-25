@@ -223,6 +223,15 @@ test.describe('pairing', () => {
       await expect(stage).toHaveAttribute('data-pan-x', '0.000')
       await expect(parent.getByTestId('presentation-canvas')).toBeHidden()
 
+      await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await parent.getByTestId('fullscreen-button').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'true')
+      await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'true')
+      await expect(parent.getByTestId('fullscreen-exit')).toBeVisible()
+      await parent.getByTestId('fullscreen-exit').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'false')
+
       await parent.getByTestId('pip-button').click()
       await expect(stage).toHaveAttribute('data-pip', 'standard', { timeout: 15_000 })
       await parent.getByTestId('pip-button').click()

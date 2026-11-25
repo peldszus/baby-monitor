@@ -12,8 +12,9 @@ actually took effect. Both devices exchange an automatic RTT ping every two seco
 
 M3 adds a screen Wake Lock, a black fullscreen child display that the parent can switch on, a loud
 parent alarm after six seconds without a heartbeat, and automatic ICE restart attempts while the
-data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning and
-Picture-in-Picture, including a canvas pipeline that keeps the transformed view in the PiP window.
+data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning,
+Picture-in-Picture and a fullscreen video toggle, including a canvas pipeline that keeps the
+transformed view in the PiP window.
 M5 adds an install prompt, offline app-shell caching, CSP and referrer meta tags, recommended
 security headers for header-capable hosts, and dependency-audit/PWA checks in CI.
 
@@ -54,6 +55,12 @@ The parent video has rotate-left and rotate-right buttons, a 1–4× zoom slider
 panning, and a reset button. Rotation and zoom use a canvas renderer so the displayed region and
 the PiP stream stay identical. Digital zoom only enlarges existing pixels; for a strong zoom,
 raise the child resolution in the camera controls first.
+
+The fullscreen button makes the video fill the screen and leaves a small exit button in the
+corner. It uses element fullscreen where the browser supports it, native video fullscreen on iOS,
+and a fixed in-app overlay as a final fallback. Drag and pinch zoom keep working while fullscreen;
+set rotation and the zoom slider before entering. Where native fullscreen is available, Esc or the
+back gesture also leaves it.
 
 The Picture-in-Picture button uses the browser's native video PiP when the view is unmodified. When
 the view is rotated, zoomed or panned, the canvas is captured with `captureStream()`, the remote

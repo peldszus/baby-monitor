@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   mdiAlertCircleOutline,
+  mdiFullscreen,
+  mdiFullscreenExit,
   mdiPictureInPictureBottomRight,
   mdiRestore,
   mdiRotateLeft,
@@ -32,6 +34,12 @@ interface TrackProcessorCtor {
   }
 }
 
+interface FullscreenVideo extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void
+  webkitExitFullscreen?: () => void
+  webkitDisplayingFullscreen?: boolean
+}
+
 const props = defineProps<{
   stream: MediaStream | null
   muted?: boolean
@@ -51,6 +59,9 @@ const supportsPip = ref(false)
 const pipActive = ref(false)
 const pipMode = ref<'standard' | 'canvas' | null>(null)
 const pipError = ref<string | null>(null)
+const fullscreen = ref(false)
+const fullscreenMode = ref<'element' | 'native' | 'overlay' | null>(null)
+let previousBodyOverflow = ''
 
 const transformed = computed(() => isTransformed(presentation.value))
 const zoomLabel = computed(() => `${presentation.value.zoom.toFixed(1)}×`)
@@ -465,6 +476,82 @@ async function togglePip(): Promise<void> {
   await startPip()
 }
 
+function setFullscreen(active: boolean, mode: 'element' | 'native' | 'overlay' | null): void {
+  if (active && !fullscreen.value) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  } else if (!active && fullscreen.value) {
+    document.body.style.overflow = previousBodyOverflow
+  }
+  fullscreen.value = active
+  fullscreenMode.value = active ? mode : null
+}
+
+async function enterFullscreen(): Promise<void> {
+  if (fullscreen.value) return
+  if (pipActive.value) await document.exitPictureInPicture().catch(() => undefined)
+
+  setFullscreen(true, 'overlay')
+  const element = stage.value
+  if (element && document.fullscreenEnabled && typeof element.requestFullscreen === 'function') {
+    try {
+      await element.requestFullscreen()
+      fullscreenMode.value = 'element'
+      return
+    } catch {
+      // Keep the in-app overlay as a fallback.
+    }
+  }
+
+  const native = video.value as FullscreenVideo | null
+  if (native && typeof native.webkitEnterFullscreen === 'function') {
+    try {
+      native.webkitEnterFullscreen()
+      fullscreenMode.value = 'native'
+      return
+    } catch {
+      // Keep the in-app overlay as a fallback.
+    }
+  }
+}
+
+async function exitFullscreen(): Promise<void> {
+  if (!fullscreen.value) return
+  if (document.fullscreenElement) {
+    await document.exitFullscreen().catch(() => undefined)
+  }
+  const native = video.value as FullscreenVideo | null
+  if (native?.webkitDisplayingFullscreen && typeof native.webkitExitFullscreen === 'function') {
+    native.webkitExitFullscreen()
+  }
+  setFullscreen(false, null)
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (fullscreen.value) {
+    await exitFullscreen()
+    return
+  }
+  await enterFullscreen()
+}
+
+function onFullscreenChange(): void {
+  const active = document.fullscreenElement === stage.value
+  if (active) {
+    setFullscreen(true, 'element')
+  } else if (fullscreenMode.value === 'element') {
+    setFullscreen(false, null)
+  }
+}
+
+function onNativeFullscreenBegin(): void {
+  setFullscreen(true, 'native')
+}
+
+function onNativeFullscreenEnd(): void {
+  if (fullscreenMode.value === 'native') setFullscreen(false, null)
+}
+
 watch(() => props.stream, attach)
 watch(
   () => props.muted,
@@ -504,8 +591,11 @@ onMounted(() => {
   )
   element?.addEventListener('enterpictureinpicture', onEnterStandardPip)
   element?.addEventListener('leavepictureinpicture', onLeaveStandardPip)
+  element?.addEventListener('webkitbeginfullscreen', onNativeFullscreenBegin)
+  element?.addEventListener('webkitendfullscreen', onNativeFullscreenEnd)
   pipVideo.value?.addEventListener('leavepictureinpicture', stopCanvasPip)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('fullscreenchange', onFullscreenChange)
   attach()
 })
 
@@ -516,8 +606,12 @@ onBeforeUnmount(() => {
   stopCanvasPip()
   video.value?.removeEventListener('enterpictureinpicture', onEnterStandardPip)
   video.value?.removeEventListener('leavepictureinpicture', onLeaveStandardPip)
+  video.value?.removeEventListener('webkitbeginfullscreen', onNativeFullscreenBegin)
+  video.value?.removeEventListener('webkitendfullscreen', onNativeFullscreenEnd)
   pipVideo.value?.removeEventListener('leavepictureinpicture', stopCanvasPip)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  if (fullscreen.value) void exitFullscreen()
 })
 </script>
 
@@ -526,11 +620,14 @@ onBeforeUnmount(() => {
     <div
       ref="stage"
       class="stage"
+      :class="{ fullscreen }"
       :data-rotation="presentation.rotation"
       :data-zoom="presentation.zoom.toFixed(2)"
       :data-pan-x="presentation.panX.toFixed(3)"
       :data-pan-y="presentation.panY.toFixed(3)"
       :data-pip="pipActive ? (pipMode ?? 'active') : 'none'"
+      :data-fullscreen="fullscreen ? 'true' : 'false'"
+      :data-fullscreen-mode="fullscreenMode ?? 'none'"
       data-testid="presentation-stage"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
@@ -559,6 +656,17 @@ onBeforeUnmount(() => {
         <v-icon :icon="mdiAlertCircleOutline" size="20" />
         Connection lost
       </div>
+      <v-btn
+        v-if="fullscreen"
+        class="fullscreen-exit"
+        variant="flat"
+        :icon="mdiFullscreenExit"
+        aria-label="Exit fullscreen"
+        title="Exit fullscreen"
+        data-testid="fullscreen-exit"
+        @pointerdown.stop
+        @click.stop="toggleFullscreen"
+      />
     </div>
 
     <div class="presentation-controls">
@@ -598,6 +706,18 @@ onBeforeUnmount(() => {
           data-testid="pip-button"
           :disabled="!supportsPip || !stream"
           @click="togglePip"
+        />
+        <v-btn
+          variant="text"
+          size="small"
+          :icon="fullscreen ? mdiFullscreenExit : mdiFullscreen"
+          :color="fullscreen ? 'primary' : undefined"
+          :aria-pressed="fullscreen"
+          :aria-label="fullscreen ? 'Exit fullscreen' : 'Fullscreen video'"
+          :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen video'"
+          data-testid="fullscreen-button"
+          :disabled="!stream"
+          @click="toggleFullscreen"
         />
       </div>
       <v-slider
@@ -639,12 +759,38 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
+.stage.fullscreen,
+.stage:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+}
+
 .video,
 .canvas {
   display: block;
   width: 100%;
   max-height: 60vh;
   object-fit: contain;
+}
+
+.stage.fullscreen .video,
+.stage:fullscreen .video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+
+.stage.fullscreen .canvas,
+.stage:fullscreen .canvas {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .video.behind {
@@ -680,6 +826,15 @@ onBeforeUnmount(() => {
   padding: 16px;
   color: rgb(var(--v-theme-on-surface-muted));
   text-align: center;
+}
+
+.fullscreen-exit {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 3;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .warning-overlay {
