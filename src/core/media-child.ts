@@ -53,7 +53,8 @@ export async function openChildMedia(options: ChildMediaOptions = {}): Promise<M
 /**
  * Owns the child's capture tracks. Turning video or audio off stops the track and
  * returns null so the caller can replace the sender track; turning it on captures a
- * fresh track. The microphone runs through a GainNode when Web Audio is available.
+ * fresh track. The microphone runs through a gain stage and limiter when Web Audio
+ * is available.
  */
 export class ChildMediaController {
   private readonly options: ChildMediaOptions
@@ -63,6 +64,7 @@ export class ChildMediaController {
   private audioContext: AudioContext | null = null
   private audioSource: MediaStreamAudioSourceNode | null = null
   private gainNode: GainNode | null = null
+  private limiterNode: DynamicsCompressorNode | null = null
   private audioDestination: MediaStreamAudioDestinationNode | null = null
   private videoSettings: VideoSettings = { ...DEFAULT_VIDEO_SETTINGS }
   private audioSettings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS }
@@ -192,6 +194,7 @@ export class ChildMediaController {
       this.audioContext = null
       this.audioSource = null
       this.gainNode = null
+      this.limiterNode = null
       this.audioDestination = null
     }
   }
@@ -242,9 +245,17 @@ export class ChildMediaController {
         this.audioDestination?.stream.getAudioTracks()[0]?.readyState === 'live'
       if (!liveDestination) {
         this.gainNode?.disconnect()
+        this.limiterNode?.disconnect()
         this.audioDestination = this.audioContext.createMediaStreamDestination()
         this.gainNode = this.audioContext.createGain()
-        this.gainNode.connect(this.audioDestination)
+        this.limiterNode = this.audioContext.createDynamicsCompressor()
+        this.limiterNode.threshold.value = -3
+        this.limiterNode.knee.value = 0
+        this.limiterNode.ratio.value = 20
+        this.limiterNode.attack.value = 0.003
+        this.limiterNode.release.value = 0.1
+        this.gainNode.connect(this.limiterNode)
+        this.limiterNode.connect(this.audioDestination)
       }
       await this.audioContext.resume()
       this.audioSource = this.audioContext.createMediaStreamSource(new MediaStream([this.rawAudio]))
@@ -258,6 +269,8 @@ export class ChildMediaController {
 
   private stopAudioGraph(): void {
     this.audioSource?.disconnect()
+    this.gainNode?.disconnect()
+    this.limiterNode?.disconnect()
     this.audioSource = null
     if (this.processedAudio && this.processedAudio !== this.rawAudio) {
       this.processedAudio.stop()

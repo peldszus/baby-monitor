@@ -157,7 +157,7 @@ test.describe('pairing', () => {
       const gain = parent.getByTestId('gain-slider').getByRole('slider')
       await gain.focus()
       await gain.press('End')
-      await expect(audioStatus).toContainText('gain 4.0')
+      await expect(audioStatus).toContainText('gain 10.0')
 
       const volume = parent.getByTestId('volume-slider').getByRole('slider')
       await volume.focus()

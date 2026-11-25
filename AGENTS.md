@@ -109,7 +109,9 @@ that directory.
 - The parent controls `set-video` and `set-audio`. The child applies them to its real tracks:
   video/audio off stops the track and calls `replaceTrack(null)`, on captures a fresh track and
   replaces it. Frame rate uses `applyConstraints` plus `maxFramerate`; resolution and bitrate use
-  `scaleResolutionDownBy` and `maxBitrate`; microphone gain runs through a `GainNode`.
+  `scaleResolutionDownBy` and `maxBitrate`; microphone gain runs through a `GainNode` (0–10×)
+  followed by a `DynamicsCompressorNode` peak limiter, so high gain boosts quiet sounds without
+  hard clipping.
 - The child sends `status` every second with actual `getStats()` values (fps, frame size, bitrate,
   audio level), the selected gain and processing flags, and battery when available. The parent
   shows those values rather than only the requested ones.
