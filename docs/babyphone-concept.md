@@ -124,7 +124,7 @@ Once the data channel is open, the child device adds its audio and video tracks 
 
 ## 5. Media
 
-- **Capture:** `getUserMedia({audio, video})` on the child device. Default: rear/main camera at 1280×720, 16:9 and 15 fps ideal; lower values remain available for bandwidth and power control. The child starts on a normal rear lens where labels allow and can switch among the cameras the browser exposes. The QR scanner also prefers a normal rear lens over an ultra-wide one.
+- **Capture:** `getUserMedia({audio, video})` on the child device. Default: rear/main camera at 1280×720, 16:9 and 15 fps ideal, with `crop-and-scale` allowed so a square-only browser capture can be fitted to 16:9; lower values remain available for bandwidth and power control. The child starts on a normal rear lens where labels allow and can switch among the cameras the browser exposes. The camera list is label-sorted; generic Android labels fall back to the first label in string order. The QR scanner also prefers a normal rear lens over an ultra-wide one.
 - **Codecs:** browser defaults (VP8/H.264, Opus). Intervene with `RTCRtpTransceiver.setCodecPreferences` only where needed (for example test H.264 for hardware encoding on some devices).
 - **Video hint:** set `videoTrack.contentHint = 'motion'` or `'detail'` and test.
 - **Audio processing:** `echoCancellation: false` (no echo scenario); `noiseSuppression` and `autoGainControl` adjustable, default rather **off**, because they can suppress quiet sounds.

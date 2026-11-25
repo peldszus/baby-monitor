@@ -44,9 +44,12 @@ switch. Both devices derive the same six-digit short code from the DTLS fingerpr
 compare them out of band.
 
 Once connected, the child can switch between the cameras the browser exposes, for example from an
-ultra-wide rear lens to the main camera, without re-pairing. The child requests a 16:9 rear camera
-and prefers a normal rear lens over one labelled wide, ultra or fisheye; use the **Camera**
-selector on the child screen to override that choice.
+ultra-wide rear lens to the main camera, without re-pairing. The child first asks for an exact
+1280×720 16:9 rear capture, then falls back to ideal constraints if the camera cannot provide it.
+It also allows the browser to crop and scale to 16:9. It prefers a normal rear lens over one
+labelled wide, ultra, fisheye or telephoto; with generic Android labels it uses the last label in
+string order. The **Camera** selector is sorted by label; use it on the child screen to override
+the choice.
 
 The parent device can turn video or audio off and on, change the frame rate,
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
@@ -65,9 +68,10 @@ raise the child resolution in the camera controls first.
 
 The fullscreen button makes the video fill the screen and leaves a small exit button in the
 corner. It uses element fullscreen where the browser supports it, native video fullscreen on iOS,
-and a fixed in-app overlay as a final fallback. Drag and pinch zoom keep working while fullscreen;
-set rotation and the zoom slider before entering. Where native fullscreen is available, Esc or the
-back gesture also leaves it.
+and a fixed in-app overlay as a final fallback. When the view is rotated or zoomed, the raw video
+is hidden behind the canvas, so a rotated fullscreen view cannot show both orientations at once.
+Drag and pinch zoom keep working while fullscreen; set rotation and the zoom slider before
+entering. Where native fullscreen is available, Esc or the back gesture also leaves it.
 
 The Picture-in-Picture button uses the browser's native video PiP when the view is unmodified. When
 the view is rotated, zoomed or panned, the canvas is captured with `captureStream()`, the remote

@@ -38,6 +38,14 @@ describe('camera selection', () => {
     expect(preferNormalCamera(devices)).toBe('back-main')
   })
 
+  it('uses the first generic rear label as the normal camera', () => {
+    const generic: CameraDevice[] = [
+      { deviceId: 'camera-0', label: 'camera2 0, facing back', wide: false },
+      { deviceId: 'camera-2', label: 'camera2 2, facing back', wide: false },
+    ]
+    expect(preferNormalCamera(generic)).toBe('camera-0')
+  })
+
   it('does not guess when labels are unavailable', () => {
     const unlabeled: CameraDevice[] = [
       { deviceId: 'camera-1', label: 'Camera 1', wide: false },
@@ -67,6 +75,7 @@ describe('listVideoInputs', () => {
           { kind: 'videoinput', deviceId: 'back', label: 'Back Camera', groupId: 'g' },
           { kind: 'audioinput', deviceId: 'mic', label: 'Microphone', groupId: 'g' },
           { kind: 'videoinput', deviceId: 'front', label: '', groupId: 'g' },
+          { kind: 'videoinput', deviceId: 'aux', label: 'Camera 10', groupId: 'g' },
         ]),
       },
     })
@@ -84,6 +93,7 @@ describe('listVideoInputs', () => {
     await expect(listVideoInputs()).resolves.toEqual([
       { deviceId: 'back', label: 'Back Camera', wide: false },
       { deviceId: 'front', label: 'Camera 2', wide: false },
+      { deviceId: 'aux', label: 'Camera 10', wide: false },
     ])
   })
 })

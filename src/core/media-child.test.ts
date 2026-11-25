@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { audioConstraints, ChildMediaController, videoConstraints } from './media-child'
+import {
+  audioConstraints,
+  ChildMediaController,
+  strictVideoConstraints,
+  videoConstraints,
+} from './media-child'
 
 describe('child media constraints', () => {
   it('asks for the rear camera at 1280x720 and 15 fps', () => {
@@ -8,6 +13,9 @@ describe('child media constraints', () => {
     expect(constraints.width).toEqual({ ideal: 1280 })
     expect(constraints.height).toEqual({ ideal: 720 })
     expect(constraints.aspectRatio).toEqual({ ideal: 16 / 9 })
+    expect((constraints as MediaTrackConstraints & { resizeMode?: unknown }).resizeMode).toEqual({
+      ideal: 'crop-and-scale',
+    })
     expect(constraints.frameRate).toEqual({ ideal: 15, max: 30 })
   })
 
@@ -16,6 +24,13 @@ describe('child media constraints', () => {
     expect(constraints.echoCancellation).toBe(false)
     expect(constraints.noiseSuppression).toBe(false)
     expect(constraints.autoGainControl).toBe(false)
+  })
+
+  it('can require an exact 1280x720 16:9 capture', () => {
+    const constraints = strictVideoConstraints()
+    expect(constraints.width).toEqual({ exact: 1280 })
+    expect(constraints.height).toEqual({ exact: 720 })
+    expect(constraints.aspectRatio).toEqual({ exact: 16 / 9 })
   })
 
   it('passes exact device ids when selected', () => {
@@ -103,7 +118,7 @@ describe('child camera switching', () => {
       expect.objectContaining({
         video: expect.objectContaining({
           deviceId: { exact: 'main' },
-          aspectRatio: { ideal: 16 / 9 },
+          aspectRatio: { exact: 16 / 9 },
         }),
         audio: false,
       })

@@ -120,9 +120,11 @@ that directory.
 - Parent playback volume uses the video element's `volume`. iOS may ignore it and use hardware
   volume instead; the UI still reflects the chosen value.
 - Child media requests the rear camera (`facingMode: environment`) at 1280×720, 16:9 and 15 fps
-  ideal. `camera.ts` lists video inputs and `preferNormalCamera` prefers a normal rear lens over
-  labels containing `wide`, `ultra` or `fisheye`. The child auto-switches once on start, then
-  exposes a `CameraSelect`;
+  ideal. `camera.ts` lists video inputs sorted by label and `preferNormalCamera` prefers a normal
+  rear lens over labels containing `wide`, `ultra`, `fisheye`, `tele` or `macro`. With generic
+  Android labels it uses the first label in string order. The child first requests exact
+  1280×720 16:9, falls back to ideal constraints on `OverconstrainedError`, asks for
+  `crop-and-scale`, auto-switches once on start, then exposes a `CameraSelect`;
   `ChildMediaController.setVideoDevice` opens the new track before stopping the old one, and
   `usePeerSession` replaces the sender track without re-pairing. The QR scanner applies the same
   preference on first open, keeps a manual selection, and also exposes a camera picker.
@@ -149,6 +151,8 @@ that directory.
   the restart fails, the session moves to `lost`, the parent alarm stays visible, and the UI asks
   for a new pairing.
 - M4 presentation: the parent keeps rotation, zoom and normalized pan in `presentation.ts`.
+  When transformed, the raw `<video>` is hidden behind the canvas. This also prevents a rotated
+  fullscreen view from showing the unrotated video around the canvas after an orientation change.
   Rotation is limited to 90° steps, zoom to 1–4×, and pan to ±1 of the maximum range. The native
   video is shown when the view is unmodified. Once transformed, `PresentationVideo` redraws the
   video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface.

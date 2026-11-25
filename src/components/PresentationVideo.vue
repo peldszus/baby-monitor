@@ -800,6 +800,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   max-height: none;
+  visibility: hidden;
   pointer-events: none;
 }
 
