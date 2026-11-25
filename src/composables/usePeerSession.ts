@@ -1,5 +1,6 @@
 import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import {
+  createEnd,
   createHello,
   createNegotiate,
   createPing,
@@ -121,7 +122,10 @@ export function usePeerSession(role: PeerRole) {
   const unlockAlarm = (): void => {
     void alarm?.unlock()
   }
-  if (role === 'parent') window.addEventListener('pointerdown', unlockAlarm, { once: true })
+  if (role === 'parent') {
+    window.addEventListener('pointerdown', unlockAlarm, { once: true })
+    window.addEventListener('pagehide', onPageHide)
+  }
 
   let peer: PeerSession | null = null
   let media: ChildMediaController | null = null
@@ -325,6 +329,45 @@ export function usePeerSession(role: PeerRole) {
     }
   }
 
+  function waitForChannelFlush(target: RTCDataChannel): Promise<void> {
+    if (target.bufferedAmount === 0) return Promise.resolve()
+    return new Promise((resolve) => {
+      const started = performance.now()
+      const check = (): void => {
+        if (
+          target.readyState !== 'open' ||
+          target.bufferedAmount === 0 ||
+          performance.now() - started >= 250
+        ) {
+          resolve()
+          return
+        }
+        setTimeout(check, 10)
+      }
+      setTimeout(check, 10)
+    })
+  }
+
+  function sendEnd(): void {
+    if (role !== 'parent') return
+    sendControl(createEnd())
+  }
+
+  async function endSession(): Promise<void> {
+    if (role !== 'parent') return
+    const target = channel
+    if (!target || target.readyState !== 'open') return
+    if (!sendControl(createEnd())) return
+    await waitForChannelFlush(target)
+    // bufferedAmount only means handed to the transport; give the SCTP
+    // association a brief moment before the caller closes the peer.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  function onPageHide(): void {
+    sendEnd()
+  }
+
   function startStatusLoop(): void {
     stopStatusLoop()
     statusTimer = setInterval(() => {
@@ -463,6 +506,10 @@ export function usePeerSession(role: PeerRole) {
     if (!result.ok) return
     const message = result.message
 
+    if (message.type === 'end') {
+      if (role === 'child') reset()
+      return
+    }
     if (message.type === 'ping') {
       if (channel?.readyState === 'open') {
         channel.send(encodeControlMessage(createPong(message.t)))
@@ -572,6 +619,7 @@ export function usePeerSession(role: PeerRole) {
     nextChannel.onclose = () => {
       channelOpen.value = false
       stopPingLoop()
+      stopStatusLoop()
     }
     nextChannel.onmessage = (event) => {
       void handleControl(event.data)
@@ -616,6 +664,7 @@ export function usePeerSession(role: PeerRole) {
       onChannel: attachChannel,
       onNegotiation: (description: NegotiationDescription) => {
         if (!channel || channel.readyState !== 'open') {
+          if (closedByUs || state.value === 'idle') return
           fail(
             new Error('The control channel is not open for media negotiation.'),
             'Could not negotiate audio and video.'
@@ -628,7 +677,9 @@ export function usePeerSession(role: PeerRole) {
           fail(cause, 'Could not negotiate audio and video.')
         }
       },
-      onNegotiationError: (cause) => fail(cause, 'Could not negotiate audio and video.'),
+      onNegotiationError: (cause) => {
+        if (!closedByUs) fail(cause, 'Could not negotiate audio and video.')
+      },
     })
   }
 
@@ -767,7 +818,11 @@ export function usePeerSession(role: PeerRole) {
   }
 
   onBeforeUnmount(() => {
-    if (role === 'parent') window.removeEventListener('pointerdown', unlockAlarm)
+    if (role === 'parent') {
+      sendEnd()
+      window.removeEventListener('pointerdown', unlockAlarm)
+      window.removeEventListener('pagehide', onPageHide)
+    }
     cleanupPeer()
     clearAlarm()
     void wakeLock.dispose()
@@ -809,6 +864,7 @@ export function usePeerSession(role: PeerRole) {
     setScreenDark,
     wakeScreen,
     silenceAlarm,
+    endSession,
     reset,
   }
 }

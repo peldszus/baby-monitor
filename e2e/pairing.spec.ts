@@ -239,9 +239,58 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('error')).toHaveCount(0)
       await expect(child.getByTestId('error')).toHaveCount(0)
 
-      await child.getByText('Stop monitoring').click()
-      await expect(child.getByTestId('role-child')).toBeVisible()
-      await expect(child).toHaveURL(/#\/$/)
+      await parent.getByText('Stop monitoring').click()
+      await expect(parent.getByTestId('role-child')).toBeVisible()
+      await expect(parent).toHaveURL(/#\/$/)
+      await expect(child.getByTestId('step-1')).toHaveAttribute('aria-current', 'step')
+      await expect(child.getByTestId('error')).toHaveCount(0)
+    } finally {
+      await childContext.close()
+      await parentContext.close()
+    }
+  })
+
+  test('parent pagehide ends the child session without an error', async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    const childContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+    const parentContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+
+    try {
+      const child = await childContext.newPage()
+      const parent = await parentContext.newPage()
+
+      await child.goto('/#/child')
+      await child.getByTestId('start-child').click()
+      await expect(child.getByTestId('qr-code')).toBeVisible({ timeout: 45_000 })
+      await child.getByText('Show text code instead').click()
+      const offer = await child.getByTestId('offer-text').getByRole('textbox').inputValue()
+
+      await parent.goto('/#/parent')
+      await parent.getByText('Enter text code instead').click()
+      await parent.getByTestId('paste-input').getByRole('textbox').fill(offer)
+      await parent.getByTestId('submit-offer').click()
+      await expect(parent.getByTestId('qr-code')).toBeVisible({ timeout: 45_000 })
+      await parent.getByText('Show text code instead').click()
+
+      await child.getByText('Enter answer manually').click()
+      const answerBox = parent.getByTestId('answer-text').getByRole('textbox')
+      await expect.poll(() => answerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
+      const answer = await answerBox.inputValue()
+      await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
+      await child.getByTestId('submit-answer').click()
+      await expect(child.getByTestId('connection-state')).toHaveText('Connected', {
+        timeout: 45_000,
+      })
+      await expect(parent.getByTestId('connection-state')).toHaveText('Connected', {
+        timeout: 45_000,
+      })
+
+      await parent.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+      await expect(child.getByTestId('step-1')).toHaveAttribute('aria-current', 'step', {
+        timeout: 10_000,
+      })
+      await expect(child.getByTestId('error')).toHaveCount(0)
     } finally {
       await childContext.close()
       await parentContext.close()

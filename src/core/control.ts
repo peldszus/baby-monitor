@@ -49,6 +49,10 @@ export interface SetScreenMessage extends MessageBase {
   dark: boolean
 }
 
+export interface EndMessage extends MessageBase {
+  type: 'end'
+}
+
 export interface StatusMessage extends MessageBase {
   type: 'status'
   battery: number | null
@@ -74,6 +78,7 @@ export type ControlMessage =
   | SetVideoMessage
   | SetAudioMessage
   | SetScreenMessage
+  | EndMessage
   | StatusMessage
 
 export type DecodeFailure = 'too-large' | 'invalid-json' | 'invalid-shape' | 'unknown-type'
@@ -137,6 +142,10 @@ export function createSetAudio(settings: AudioSettings): SetAudioMessage {
 
 export function createSetScreen(dark: boolean): SetScreenMessage {
   return { v: 1, id: makeId(), type: 'set-screen', dark }
+}
+
+export function createEnd(): EndMessage {
+  return { v: 1, id: makeId(), type: 'end' }
 }
 
 export type StatusInput = Omit<StatusMessage, 'v' | 'id' | 'type'>
@@ -235,6 +244,9 @@ export function decodeControlMessage(raw: unknown): DecodeResult {
         ok: true,
         message: { v: 1, id: value.id, type: 'set-screen', dark: value.dark },
       }
+    }
+    case 'end': {
+      return { ok: true, message: { v: 1, id: value.id, type: 'end' } }
     }
     case 'status': {
       if (

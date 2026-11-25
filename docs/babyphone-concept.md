@@ -147,6 +147,7 @@ One `RTCDataChannel` (`ordered: true`, label `control`), encrypted like the medi
 | parent → child | `set-video`     | `{enabled, fps, scaleDownBy, maxBitrate}`                                            |
 | parent → child | `set-audio`     | `{enabled, gain, noiseSuppression, autoGainControl}`                                 |
 | parent → child | `set-screen`    | `{dark}`                                                                             |
+| parent → child | `end`           | no payload; stop the child stream and return to pairing                              |
 | child → parent | `status`        | `{battery, charging, fps, width, height, bitrate, audioLevel, screenDark, zoomCaps}` |
 | child → parent | `ack` / `error` | acknowledgement or error for a command (`id`)                                        |
 
