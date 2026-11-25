@@ -49,6 +49,12 @@ describe('control protocol', () => {
       noiseSuppression: true,
       autoGainControl: false,
     })
+    const maxAudio = createSetAudio({
+      enabled: true,
+      gain: 10,
+      noiseSuppression: false,
+      autoGainControl: false,
+    })
     const screen = createSetScreen(true)
     const status = createStatus({
       battery: 87,
@@ -66,7 +72,7 @@ describe('control protocol', () => {
       screenDark: false,
     })
 
-    for (const message of [video, audio, screen, status]) {
+    for (const message of [video, audio, maxAudio, screen, status]) {
       expect(decodeControlMessage(encodeControlMessage(message))).toEqual({
         ok: true,
         message,
@@ -81,7 +87,7 @@ describe('control protocol', () => {
       '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":10,"scaleDownBy":9,"maxBitrate":500000}',
       '{"v":1,"id":"x","type":"set-video","enabled":true,"fps":10,"scaleDownBy":1,"maxBitrate":1000}',
       '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":-1,"noiseSuppression":false,"autoGainControl":false}',
-      '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":4.1,"noiseSuppression":false,"autoGainControl":false}',
+      '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":10.1,"noiseSuppression":false,"autoGainControl":false}',
       '{"v":1,"id":"x","type":"set-audio","enabled":true,"gain":1,"noiseSuppression":"yes","autoGainControl":false}',
       '{"v":1,"id":"x","type":"set-screen","dark":"yes"}',
       '{"v":1,"id":"x","type":"status","battery":101,"charging":true,"fps":10,"width":640,"height":360,"bitrate":0,"audioLevel":0,"gain":1,"videoEnabled":true,"audioEnabled":true,"noiseSuppression":false,"autoGainControl":false,"screenDark":false}',

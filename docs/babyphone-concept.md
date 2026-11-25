@@ -126,7 +126,7 @@ Once the data channel is open, the child device adds its audio and video tracks 
 - **Codecs:** browser defaults (VP8/H.264, Opus). Intervene with `RTCRtpTransceiver.setCodecPreferences` only where needed (for example test H.264 for hardware encoding on some devices).
 - **Video hint:** set `videoTrack.contentHint = 'motion'` or `'detail'` and test.
 - **Audio processing:** `echoCancellation: false` (no echo scenario); `noiseSuppression` and `autoGainControl` adjustable, default rather **off**, because they can suppress quiet sounds.
-- **Microphone sensitivity:** route the capture stream through a `GainNode` (Web Audio) and send the output of a `MediaStreamAudioDestinationNode`. Set the gain via the control channel.
+- **Microphone sensitivity:** route the capture stream through a `GainNode` (Web Audio) and a peak limiter (`DynamicsCompressorNode`), then send the output of a `MediaStreamAudioDestinationNode`. Set the gain via the control channel.
 - **Dynamic quality:**
   - Frame rate: `videoTrack.applyConstraints({frameRate})` and/or `sender.setParameters()` with `maxFramerate`.
   - Resolution: `scaleResolutionDownBy` in `setParameters()` (no camera restart, preferred), alternatively `applyConstraints({width, height})`.
@@ -153,7 +153,7 @@ One `RTCDataChannel` (`ordered: true`, label `control`), encrypted like the medi
 Rules:
 
 - Every message has `id` and `v`. Ignore unknown types and fields.
-- **Validate all input:** types, value ranges (for example fps 1–30, gain 0–4), message size limit, rate limit.
+- **Validate all input:** types, value ranges (for example fps 1–30, gain 0–10), message size limit, rate limit.
 - Commands are accepted only over the authenticated channel. The child device executes commands only from this one connection.
 - The child device answers with the state **actually** applied (`status`) and the parent device shows that state.
 

@@ -21,9 +21,11 @@ export const VIDEO_LIMITS = {
   bitrateMax: 8_000_000,
 } as const
 
+// Linear amplitude. The child applies a peak limiter after this gain stage so
+// high settings boost quiet sounds without hard clipping loud ones.
 export const AUDIO_LIMITS = {
   gainMin: 0,
-  gainMax: 4,
+  gainMax: 10,
 } as const
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {

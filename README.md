@@ -42,10 +42,11 @@ of band.
 
 Once connected, the parent device can turn video or audio off and on, change the frame rate,
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
-The child stops the camera or microphone track when it is switched off, so the camera light goes
-out. The parent also has a playback volume slider; on iOS the hardware volume may still be the
-effective control. Each device pings the other every two seconds and shows the latest round-trip
-time next to the connection state.
+Microphone gain goes up to 10× (about +20 dB); the child runs a peak limiter after the gain stage
+so quiet sounds get louder without hard clipping. The child stops the camera or microphone track
+when it is switched off, so the camera light goes out. The parent also has a playback volume
+slider; on iOS the hardware volume may still be the effective control. Each device pings the other
+every two seconds and shows the latest round-trip time next to the connection state.
 
 ### Parent presentation
 

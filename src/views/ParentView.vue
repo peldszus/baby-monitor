@@ -10,7 +10,12 @@ import SignalQr from '@/components/SignalQr.vue'
 import PresentationVideo from '@/components/PresentationVideo.vue'
 import TextCodePanel from '@/components/TextCodePanel.vue'
 import { usePeerSession } from '@/composables/usePeerSession'
-import { BITRATE_OPTIONS, FPS_OPTIONS, RESOLUTION_OPTIONS } from '@/core/media-settings'
+import {
+  AUDIO_LIMITS,
+  BITRATE_OPTIONS,
+  FPS_OPTIONS,
+  RESOLUTION_OPTIONS,
+} from '@/core/media-settings'
 
 const router = useRouter()
 
@@ -346,8 +351,8 @@ function stopMonitoring(): void {
           <span>Mic gain {{ audioSettings.gain.toFixed(1) }}</span>
           <v-slider
             :model-value="audioSettings.gain"
-            :min="0"
-            :max="4"
+            :min="AUDIO_LIMITS.gainMin"
+            :max="AUDIO_LIMITS.gainMax"
             :step="0.1"
             color="primary"
             hide-details
