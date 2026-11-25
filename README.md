@@ -109,6 +109,10 @@ advisories and prints the rest.
 - The parent unlocks a Web Audio warning tone with the first tap. If six seconds pass without a
   heartbeat response, or WebRTC reports a failure, a fullscreen warning appears and the tone
   sounds. You can silence the tone while the warning stays visible, or stop monitoring.
+- Stopping monitoring on the parent sends an `end` control message before the peer is closed, so
+  the child stops its camera and microphone and returns to pairing step 1 without an error. The
+  parent also sends `end` on `pagehide`; closing or navigating away is best effort, so the child
+  still handles an abrupt channel close as a lost connection.
 - On a short network interruption, both sides try an ICE restart over the existing data channel.
   This cannot repair a changed network or a closed data channel; when it fails, the app says so and
   asks for a new pairing.

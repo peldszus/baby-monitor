@@ -99,7 +99,7 @@ that directory.
 - The control channel is one ordered `RTCDataChannel` labelled `control`. Messages are versioned
   JSON with an `id`, and `decodeControlMessage` rejects unknown types, bad shapes, oversized
   messages and out-of-range values. M2 adds `set-video`, `set-audio` and `status`; every value has
-  an explicit range.
+  an explicit range. `end` is a payload-free parent-to-child teardown message.
 - `PeerSession` always uses `iceServers: []`, waits for complete ICE gathering before returning an
   SDP, and keeps media and control on the same encrypted peer connection. Pairing creates only the
   data channel; `startMedia` adds the child's tracks after the channel is open and triggers a media
@@ -191,8 +191,9 @@ devices show an automatic RTT. It also toggles video and audio, changes frame ra
 bitrate, enables noise suppression and automatic gain, sets gain and volume, rotates, zooms,
 pans, resets the presentation, opens native and canvas PiP, toggles the child's dark screen, and
 verifies the child's tracks and reported status. A separate case closes the child context and
-checks that the parent alarm appears, can be silenced and can be stopped. Three additional cases
-check that the pairing screens do not scroll at phone viewport sizes.
+checks that the parent alarm appears, can be silenced and can be stopped. Another dispatches
+`pagehide` on the parent and checks that the child returns to pairing without an error. Three
+additional cases check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic
 scanner, including the jsQR fallback when `BarcodeDetector` throws. `e2e/pwa.spec.ts` runs against
 `vite preview` with service workers enabled, checks PWA metadata and the install prompt, then goes
@@ -279,7 +280,10 @@ Hash-based routing (`#/`) is used for full GitHub Pages compatibility.
 - The home role cards are single-action surfaces: icon plus `Use as child device` or
   `Use as parent device`. Keep them keyboard-operable and avoid adding extra copy.
 - `Stop monitoring` resets the peer session and calls `router.replace('/')` on both role views.
-  `Start over` and `Cancel` stay inside the pairing flow because they restart pairing rather than
-  close a live stream.
+  On the parent, it first sends `end` and waits for the data channel to flush, so the child stops
+  its tracks and returns to pairing step 1 without an error. The parent also sends `end` from
+  `pagehide` and `onBeforeUnmount`; those paths are best effort because the browser may tear the
+  connection down immediately. `Start over` and `Cancel` stay inside the pairing flow because they
+  restart pairing rather than close a live stream.
 - `PairingSteps` has a small bottom margin so the step graph is not glued to the next panel. The
   pairing views trim their outer padding to keep the 320×568 no-scroll test passing.

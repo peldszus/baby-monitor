@@ -48,6 +48,7 @@ const {
   setVolume,
   setScreenDark,
   silenceAlarm,
+  endSession,
   reset,
 } = usePeerSession('parent')
 
@@ -145,7 +146,8 @@ function startOver(): void {
   reset()
 }
 
-function stopMonitoring(): void {
+async function stopMonitoring(): Promise<void> {
+  await endSession()
   startOver()
   void router.replace('/')
 }

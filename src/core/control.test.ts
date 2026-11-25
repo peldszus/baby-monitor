@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createEnd,
   createHello,
   createNegotiate,
   createPing,
@@ -56,6 +57,7 @@ describe('control protocol', () => {
       autoGainControl: false,
     })
     const screen = createSetScreen(true)
+    const end = createEnd()
     const status = createStatus({
       battery: 87,
       charging: true,
@@ -72,7 +74,7 @@ describe('control protocol', () => {
       screenDark: false,
     })
 
-    for (const message of [video, audio, maxAudio, screen, status]) {
+    for (const message of [video, audio, maxAudio, screen, end, status]) {
       expect(decodeControlMessage(encodeControlMessage(message))).toEqual({
         ok: true,
         message,
