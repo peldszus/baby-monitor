@@ -54,6 +54,7 @@ src/
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
     negotiation.ts           # Perfect negotiation for media over the data channel
     peer.ts                  # RTCPeerConnection wrapper, data handshake, media negotiation
+    camera.ts                # Video input listing and normal-rear-camera preference
     media-child.ts           # Capture tracks, gain graph, constraints and replaceTrack helpers
     media-settings.ts        # Shared defaults, ranges and UI presets for M2 controls
     media-stats.ts           # getStats() summary for actual fps, size, bitrate and audio level
@@ -64,6 +65,7 @@ src/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
     VideoStream.vue          # Attaches a MediaStream to a <video>
+    CameraSelect.vue         # Shared camera picker for the child and QR scanner
     PresentationVideo.vue    # Parent canvas presentation, gestures and PiP
     ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
     AlarmOverlay.vue         # Fullscreen parent warning when the connection fails
@@ -117,7 +119,13 @@ that directory.
   shows those values rather than only the requested ones.
 - Parent playback volume uses the video element's `volume`. iOS may ignore it and use hardware
   volume instead; the UI still reflects the chosen value.
-- Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
+- Child media requests the rear camera (`facingMode: environment`) at 1280×720, 16:9 and 15 fps
+  ideal. `camera.ts` lists video inputs and `preferNormalCamera` prefers a normal rear lens over
+  labels containing `wide`, `ultra` or `fisheye`. The child auto-switches once on start, then
+  exposes a `CameraSelect`;
+  `ChildMediaController.setVideoDevice` opens the new track before stopping the old one, and
+  `usePeerSession` replaces the sender track without re-pairing. The QR scanner applies the same
+  preference on first open, keeps a manual selection, and also exposes a camera picker.
 - Pairing uses one shared three-step indicator on both devices: child code, parent code and
   connect. The child shows the offer then scans the answer; the parent scans the offer then shows
   the answer. The QR exchange is one-way, so the child cannot know when the parent scanned its

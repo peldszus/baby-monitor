@@ -37,11 +37,18 @@ vertical scrolling on phone viewports.
 The QR code carries only the ICE credentials, DTLS fingerprint and host candidates; the rest of the
 data-channel SDP comes from a shared template. It is one small code per direction and expires after
 two minutes. A compressed full-SDP fallback still supports chunking if a browser combination needs
-it. The scanner reads continuously while the dialog is open; there is no shutter button. Both
-devices derive the same six-digit short code from the DTLS fingerprints so you can compare them out
-of band.
+it. The scanner reads continuously while the dialog is open; there is no shutter button. It asks for
+a 16:9 rear camera and prefers the normal rear lens over a label containing `wide`, `ultra` or
+`fisheye`. If the browser exposes several cameras, a **Camera** selector in the scanner lets you
+switch. Both devices derive the same six-digit short code from the DTLS fingerprints so you can
+compare them out of band.
 
-Once connected, the parent device can turn video or audio off and on, change the frame rate,
+Once connected, the child can switch between the cameras the browser exposes, for example from an
+ultra-wide rear lens to the main camera, without re-pairing. The child requests a 16:9 rear camera
+and prefers a normal rear lens over one labelled wide, ultra or fisheye; use the **Camera**
+selector on the child screen to override that choice.
+
+The parent device can turn video or audio off and on, change the frame rate,
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
 Microphone gain goes up to 10× (about +20 dB); the child runs a peak limiter after the gain stage
 so quiet sounds get louder without hard clipping. The child stops the camera or microphone track

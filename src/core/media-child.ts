@@ -17,6 +17,7 @@ export function videoConstraints(options: ChildMediaOptions = {}): MediaTrackCon
     facingMode: { ideal: 'environment' },
     width: { ideal: 1280 },
     height: { ideal: 720 },
+    aspectRatio: { ideal: 16 / 9 },
     frameRate: { ideal: 15, max: 30 },
     deviceId: options.videoDeviceId ? { exact: options.videoDeviceId } : undefined,
   }
@@ -112,6 +113,78 @@ export class ChildMediaController {
     await this.rebuildAudioGraph()
     this.syncStream()
     return this.currentStream
+  }
+
+  async setVideoDevice(deviceId: string | null): Promise<MediaStreamTrack | null> {
+    if (this.stopped) return null
+    const nextId = deviceId || undefined
+    if (nextId === this.options.videoDeviceId) return this.rawVideo
+    if (!this.videoSettings.enabled) {
+      this.options.videoDeviceId = nextId
+      return null
+    }
+
+    const previousId = this.options.videoDeviceId
+    this.options.videoDeviceId = nextId
+    try {
+      let track: MediaStreamTrack
+      try {
+        track = await this.captureVideoTrack()
+      } catch (firstCause) {
+        // Many phones cannot keep two cameras open at once. Release the old
+        // track and retry before giving up on the switch.
+        this.rawVideo?.stop()
+        this.rawVideo = null
+        this.syncStream()
+        try {
+          track = await this.captureVideoTrack()
+        } catch {
+          await this.restoreVideoTrack(previousId)
+          throw firstCause
+        }
+      }
+      if (this.stopped) {
+        track.stop()
+        return null
+      }
+      this.rawVideo?.stop()
+      this.rawVideo = track
+      await this.applyVideoConstraints()
+      this.syncStream()
+      return track
+    } catch (cause) {
+      this.options.videoDeviceId = previousId
+      if (!this.rawVideo && this.videoSettings.enabled && !this.stopped) {
+        await this.restoreVideoTrack(previousId)
+      }
+      throw cause
+    }
+  }
+
+  private async captureVideoTrack(): Promise<MediaStreamTrack> {
+    const stream = await openChildMedia({ ...this.options, video: true, audio: false })
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stopStream(stream)
+      throw new Error('The camera did not provide a video track.')
+    }
+    return track
+  }
+
+  private async restoreVideoTrack(deviceId: string | undefined): Promise<void> {
+    this.options.videoDeviceId = deviceId
+    try {
+      const track = await this.captureVideoTrack()
+      if (this.stopped) {
+        track.stop()
+        return
+      }
+      this.rawVideo = track
+      await this.applyVideoConstraints()
+    } catch {
+      this.rawVideo = null
+    }
+    this.syncStream()
   }
 
   async setVideoEnabled(enabled: boolean): Promise<MediaStreamTrack | null> {

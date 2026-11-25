@@ -18,6 +18,7 @@ import {
   type StatusMessage,
 } from '@/core/control'
 import { WebAudioAlarm } from '@/core/alarm'
+import { listVideoInputs, preferNormalCamera, type CameraDevice } from '@/core/camera'
 import { HeartbeatMonitor } from '@/core/heartbeat'
 import { ChildMediaController, stopStream } from '@/core/media-child'
 import {
@@ -98,6 +99,8 @@ export function usePeerSession(role: PeerRole) {
   const pairingProgress = ref<string | null>(null)
   const localStream = shallowRef<MediaStream | null>(null)
   const remoteStream = shallowRef<MediaStream | null>(null)
+  const videoDevices = ref<CameraDevice[]>([])
+  const selectedVideoDeviceId = ref('')
   const offerChunks = ref<string[]>([])
   const answerChunks = ref<string[]>([])
   const offerExpiresAt = ref<number | null>(null)
@@ -141,6 +144,13 @@ export function usePeerSession(role: PeerRole) {
   let closedByUs = false
   let mediaStarted = false
   let mediaReady = false
+
+  function onDeviceChange(): void {
+    void refreshVideoDevices()
+  }
+  if (role === 'child') {
+    navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
+  }
 
   const offerCollector = new SignalChunkCollector()
   const answerCollector = new SignalChunkCollector()
@@ -375,6 +385,47 @@ export function usePeerSession(role: PeerRole) {
     }, 1000)
   }
 
+  async function refreshVideoDevices(autoSwitch = false): Promise<void> {
+    if (role !== 'child' || !media) return
+    let devices: CameraDevice[] = []
+    try {
+      devices = await listVideoInputs()
+    } catch {
+      devices = []
+    }
+    videoDevices.value = devices
+    const currentId = media.videoTrack?.getSettings().deviceId ?? ''
+    const preferred = preferNormalCamera(devices, currentId)
+    if (autoSwitch && preferred && preferred !== currentId && media.settings.video.enabled) {
+      try {
+        await media.setVideoDevice(preferred)
+      } catch {
+        // Keep the current camera; the picker is still available.
+      }
+    }
+    const actualId = media.videoTrack?.getSettings().deviceId ?? ''
+    selectedVideoDeviceId.value = actualId || selectedVideoDeviceId.value || preferred
+    localStream.value = media.stream
+  }
+
+  async function switchVideoDevice(deviceId: string): Promise<void> {
+    if (role !== 'child' || !media || !peer) return
+    if (!deviceId || deviceId === selectedVideoDeviceId.value) return
+    error.value = null
+    try {
+      const track = await media.setVideoDevice(deviceId)
+      if (peer) await peer.replaceVideoTrack(track)
+      selectedVideoDeviceId.value = media.videoTrack?.getSettings().deviceId ?? deviceId
+      localStream.value = media.stream
+      await sendStatus()
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : 'Could not switch the camera.'
+      if (peer) await peer.replaceVideoTrack(media.videoTrack)
+      localStream.value = media.stream
+      await refreshVideoDevices()
+    }
+  }
+
   async function sendStatus(): Promise<void> {
     if (role !== 'child' || !peer || !channel || channel.readyState !== 'open') return
     if (statusInFlight) return
@@ -578,17 +629,19 @@ export function usePeerSession(role: PeerRole) {
     pairingProgress.value = 'Starting camera and microphone…'
     try {
       media = new ChildMediaController()
-      const stream = await media.start()
+      await media.start()
       if (closedByUs || !peer) {
         media.stop()
         media = null
         return
       }
-      localStream.value = stream
+      localStream.value = media.stream
       videoSettings.value = { ...media.settings.video }
       audioSettings.value = { ...media.settings.audio }
+      await refreshVideoDevices(true)
+      if (closedByUs || !peer || !media) return
       pairingProgress.value = 'Connecting media…'
-      peer.startMedia(stream)
+      peer.startMedia(media.stream)
       startStatusLoop()
       void sendStatus()
     } catch (cause) {
@@ -822,6 +875,8 @@ export function usePeerSession(role: PeerRole) {
       sendEnd()
       window.removeEventListener('pointerdown', unlockAlarm)
       window.removeEventListener('pagehide', onPageHide)
+    } else {
+      navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }
     cleanupPeer()
     clearAlarm()
@@ -835,6 +890,8 @@ export function usePeerSession(role: PeerRole) {
     pairingProgress,
     localStream,
     remoteStream,
+    videoDevices,
+    selectedVideoDeviceId,
     offerChunks,
     answerChunks,
     offerExpiresAt,
@@ -858,6 +915,7 @@ export function usePeerSession(role: PeerRole) {
     startChild,
     acceptOffer,
     acceptAnswer,
+    switchVideoDevice,
     updateVideoSettings,
     updateAudioSettings,
     setVolume,

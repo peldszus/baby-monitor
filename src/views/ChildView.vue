@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
+import CameraSelect from '@/components/CameraSelect.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import PairingSteps from '@/components/PairingSteps.vue'
 import QrScanner from '@/components/QrScanner.vue'
@@ -17,6 +18,8 @@ const {
   error,
   pairingProgress,
   localStream,
+  videoDevices,
+  selectedVideoDeviceId,
   offerChunks,
   offerExpiresAt,
   shortCode,
@@ -31,6 +34,7 @@ const {
   wakeLockSupported,
   startChild,
   acceptAnswer,
+  switchVideoDevice,
   wakeScreen,
   reset,
 } = usePeerSession('child')
@@ -237,6 +241,18 @@ onBeforeUnmount(cancelWakePress)
         :wake-lock-supported="wakeLockSupported"
       />
       <VideoStream :stream="localStream" muted test-id="local-video" />
+      <section v-if="videoDevices.length > 1" class="panel">
+        <h2>Camera</h2>
+        <CameraSelect
+          :devices="videoDevices"
+          :model-value="selectedVideoDeviceId"
+          test-id="camera-select"
+          @update:model-value="switchVideoDevice"
+        />
+        <p class="progress">
+          Choose the main camera if the wide-angle view shows too much of the room.
+        </p>
+      </section>
       <section class="panel status-panel">
         <div class="status-heading">
           <h2>Live status</h2>

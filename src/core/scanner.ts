@@ -17,9 +17,19 @@ export interface QrScanner {
   start(
     video: HTMLVideoElement,
     onResult: (text: string) => void,
-    sourceStream?: MediaStream | null
+    sourceStream?: MediaStream | null,
+    deviceId?: string
   ): Promise<void>
   stop(): void
+}
+
+export function scannerVideoConstraints(deviceId?: string): MediaTrackConstraints {
+  return {
+    ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' } }),
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    aspectRatio: { ideal: 16 / 9 },
+  }
 }
 
 const BARCODE_INTERVAL_MS = 200
@@ -108,7 +118,7 @@ export function createQrScanner(): QrScanner {
   }
 
   return {
-    async start(video, onResult, sourceStream) {
+    async start(video, onResult, sourceStream, deviceId) {
       if (running) return
       const token = ++generation
 
@@ -120,11 +130,7 @@ export function createQrScanner(): QrScanner {
           throw new Error('Camera access is not available in this browser.')
         }
         const nextStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          video: scannerVideoConstraints(deviceId),
           audio: false,
         })
         if (token !== generation) {
