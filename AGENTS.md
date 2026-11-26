@@ -155,7 +155,10 @@ that directory.
   fullscreen view from showing the unrotated video around the canvas after an orientation change.
   Rotation is limited to 90° steps, zoom to 1–4×, and pan to ±1 of the maximum range. The native
   video is shown when the view is unmodified. Once transformed, `PresentationVideo` redraws the
-  video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface.
+  video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface. The
+  draw loop re-reads `videoWidth`/`videoHeight`, so a child orientation change resizes the canvas
+  instead of stretching the frame. The canvas uses auto width/height with max constraints, so a
+  portrait stream keeps its aspect ratio in the normal and fullscreen layouts.
 - Native PiP is requested on the main video at identity. For a transformed view,
   `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
   on a hidden video. Switching between identity and transformed views closes PiP; the user starts

@@ -71,7 +71,9 @@ corner. It uses element fullscreen where the browser supports it, native video f
 and a fixed in-app overlay as a final fallback. When the view is rotated or zoomed, the raw video
 is hidden behind the canvas, so a rotated fullscreen view cannot show both orientations at once.
 Drag and pinch zoom keep working while fullscreen; set rotation and the zoom slider before
-entering. Where native fullscreen is available, Esc or the back gesture also leaves it.
+entering. Where native fullscreen is available, Esc or the back gesture also leaves it. If the
+child browser rotates and the camera changes frame size, the parent canvas follows the new
+dimensions and keeps its aspect ratio instead of stretching the image.
 
 The Picture-in-Picture button uses the browser's native video PiP when the view is unmodified. When
 the view is rotated, zoomed or panned, the canvas is captured with `captureStream()`, the remote

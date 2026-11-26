@@ -98,13 +98,22 @@ function syncCanvasAudio(): void {
   if (audio) canvasStream.addTrack(audio)
 }
 
-function updateVideoSize(): void {
+function syncVideoSize(): void {
+  if (readingFrames) return
   const element = video.value
   if (!element) return
   if (element.videoWidth > 0 && element.videoHeight > 0) {
-    videoSize.value = { width: element.videoWidth, height: element.videoHeight }
-    resizeCanvas()
+    const width = element.videoWidth
+    const height = element.videoHeight
+    if (width !== videoSize.value.width || height !== videoSize.value.height) {
+      videoSize.value = { width, height }
+    }
   }
+}
+
+function updateVideoSize(): void {
+  syncVideoSize()
+  resizeCanvas()
 }
 
 function resizeCanvas(): void {
@@ -162,7 +171,9 @@ function drawFrameWith(
 
 function drawFrame(): void {
   const source = video.value
-  if (!source || videoSize.value.width === 0) return
+  if (!source) return
+  syncVideoSize()
+  if (videoSize.value.width === 0) return
   drawFrameWith(
     source.readyState >= 2 ? source : null,
     videoSize.value.width,
@@ -569,6 +580,7 @@ watch(
     presentation.value.panY,
   ],
   () => {
+    syncVideoSize()
     resizeCanvas()
     syncDrawLoop()
     if (pipMode.value === 'standard' && transformed.value) {
@@ -807,6 +819,10 @@ onBeforeUnmount(() => {
 .canvas {
   position: relative;
   z-index: 1;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 60vh;
   background: #000;
   touch-action: none;
 }

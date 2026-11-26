@@ -170,7 +170,44 @@ test.describe('pairing', () => {
       await expect(stage).toHaveAttribute('data-rotation', '0')
       await parent.getByTestId('rotate-right').click()
       await expect(stage).toHaveAttribute('data-rotation', '90')
-      await expect(parent.getByTestId('presentation-canvas')).toBeVisible()
+      const canvas = parent.getByTestId('presentation-canvas')
+      await expect(canvas).toBeVisible()
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([180, 320])
+      const canvasBox = await canvas.boundingBox()
+      if (!canvasBox) throw new Error('Presentation canvas has no bounding box.')
+      expect(canvasBox.width / canvasBox.height).toBeCloseTo(180 / 320, 2)
+
+      await remoteVideo.evaluate((element) => {
+        Object.defineProperty(element, 'videoWidth', { configurable: true, get: () => 180 })
+        Object.defineProperty(element, 'videoHeight', { configurable: true, get: () => 320 })
+      })
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([320, 180])
+      await remoteVideo.evaluate((element) => {
+        Reflect.deleteProperty(element, 'videoWidth')
+        Reflect.deleteProperty(element, 'videoHeight')
+      })
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([180, 320])
 
       const zoom = parent.getByTestId('zoom-slider').getByRole('slider')
       await zoom.focus()
