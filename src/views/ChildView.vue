@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { mdiCameraOutline, mdiQrcodeScan } from '@mdi/js'
 import CameraSelect from '@/components/CameraSelect.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
@@ -36,6 +36,7 @@ const {
   acceptAnswer,
   switchVideoDevice,
   wakeScreen,
+  endSession,
   reset,
 } = usePeerSession('child')
 
@@ -111,7 +112,8 @@ function startOver(): void {
   reset()
 }
 
-function stopMonitoring(): void {
+async function stopMonitoring(): Promise<void> {
+  await endSession()
   startOver()
   void router.replace('/')
 }
@@ -132,6 +134,10 @@ function startWakePress(): void {
 }
 
 onBeforeUnmount(cancelWakePress)
+
+onBeforeRouteLeave(async () => {
+  await endSession()
+})
 </script>
 
 <template>

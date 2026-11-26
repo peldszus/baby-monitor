@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
+import { useAppNotice } from '@/composables/useAppNotice'
 
 const route = useRoute()
 const router = useRouter()
+const { notice, dismissNotice } = useAppNotice()
+
+function onNoticeUpdate(value: boolean): void {
+  if (!value) dismissNotice()
+}
 </script>
 
 <template>
@@ -23,6 +29,19 @@ const router = useRouter()
         </Transition>
       </RouterView>
     </v-main>
+
+    <v-snackbar
+      :model-value="notice !== null"
+      :timeout="8000"
+      color="surface-container-high"
+      location="bottom"
+      @update:model-value="onNoticeUpdate"
+    >
+      <span data-testid="app-notice">{{ notice }}</span>
+      <template #actions>
+        <v-btn variant="text" @click="dismissNotice">Close</v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 

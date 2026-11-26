@@ -165,6 +165,7 @@ Rules:
 ### 7.1 Reliability
 
 - **Heartbeat:** `ping` every 2 s. If `pong` is missing (for example for 6 s) or `connectionState` changes to `disconnected`/`failed`, the parent device raises a **loud alarm** (warning tone via Web Audio, clear fullscreen warning). A baby monitor that fails silently is more dangerous than none.
+- **Clean stop:** either device can send an `end` message. The other side stops its tracks, returns to the home screen, and shows a timestamped notice. An abrupt loss stays on the alarm path.
 - The alarm sound must be “unlocked” beforehand by a user action (autoplay rules): play a short tone when monitoring starts.
 - Automatic reconnection attempts (see 4.5), then a clear prompt for a new pairing.
 
@@ -232,7 +233,7 @@ The two-device setup is testable: Playwright can start two isolated browser cont
    - State machine and heartbeat with fake timers (alarm after 6 s without pong).
    - Short code derived from fingerprints.
 2. **Integration tests:** two real `RTCPeerConnection`s in the same Chromium page (Vitest Browser Mode or Playwright). Cover the compact handshake, data channel, media renegotiation over the data channel, commands and status messages, without UI.
-3. **End-to-end tests (Playwright):** two contexts, the real flow: role selection, pairing, video arrives, controls take effect, alarm on connection loss.
+3. **End-to-end tests (Playwright):** two contexts, the real flow: role selection, pairing, video arrives, controls take effect, alarm on connection loss, and a clean stop from either side that returns both devices home.
 4. **Manual device tests:** everything automation cannot cover (see 11.3).
 
 ### 11.2 What Playwright Can Do in Chromium
