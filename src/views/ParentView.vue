@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { mdiCellphone, mdiQrcodeScan } from '@mdi/js'
 import AlarmOverlay from '@/components/AlarmOverlay.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
@@ -151,6 +151,10 @@ async function stopMonitoring(): Promise<void> {
   startOver()
   void router.replace('/')
 }
+
+onBeforeRouteLeave(async () => {
+  await endSession()
+})
 </script>
 
 <template>

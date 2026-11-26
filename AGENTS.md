@@ -52,6 +52,7 @@ src/
     presentation.ts          # Parent rotation, zoom and pan math
     signaling-qr.ts          # Compact handshake codec, full-SDP fallback, CRC-32 and expiry
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
+    notice.ts                # Timestamped remote-end message for the app snackbar
     negotiation.ts           # Perfect negotiation for media over the data channel
     peer.ts                  # RTCPeerConnection wrapper, data handshake, media negotiation
     camera.ts                # Video input listing and normal-rear-camera preference
@@ -61,6 +62,7 @@ src/
     scanner.ts               # BarcodeDetector scanner with jsQR fallback
   composables/
     usePeerSession.ts        # Role session orchestration used by both views
+    useAppNotice.ts          # Module-level snackbar notice shared by both views
   components/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
@@ -101,7 +103,7 @@ that directory.
 - The control channel is one ordered `RTCDataChannel` labelled `control`. Messages are versioned
   JSON with an `id`, and `decodeControlMessage` rejects unknown types, bad shapes, oversized
   messages and out-of-range values. M2 adds `set-video`, `set-audio` and `status`; every value has
-  an explicit range. `end` is a payload-free parent-to-child teardown message.
+  an explicit range. `end` is a payload-free teardown message that either role can send.
 - `PeerSession` always uses `iceServers: []`, waits for complete ICE gathering before returning an
   SDP, and keeps media and control on the same encrypted peer connection. Pairing creates only the
   data channel; `startMedia` adds the child's tracks after the channel is open and triggers a media
@@ -301,10 +303,11 @@ Hash-based routing (`#/`) is used for full GitHub Pages compatibility.
 - The home role cards are single-action surfaces: icon plus `Use as child device` or
   `Use as parent device`. Keep them keyboard-operable and avoid adding extra copy.
 - `Stop monitoring` resets the peer session and calls `router.replace('/')` on both role views.
-  On the parent, it first sends `end` and waits for the data channel to flush, so the child stops
-  its tracks and returns to pairing step 1 without an error. The parent also sends `end` from
-  `pagehide` and `onBeforeUnmount`; those paths are best effort because the browser may tear the
-  connection down immediately. `Start over` and `Cancel` stay inside the pairing flow because they
-  restart pairing rather than close a live stream.
+  Either role first sends `end` and waits for the data channel to flush, so the other side stops
+  its tracks, returns home, and shows a timestamped snackbar from `useAppNotice` without an error
+  or alarm. Both roles also send `end` from `pagehide`, `onBeforeUnmount` and the route-leave
+  guard; those paths are best effort because the browser may tear the connection down immediately.
+  An abrupt loss still follows the alarm/lost path. `Start over` and `Cancel` stay inside the
+  pairing flow because they restart pairing rather than close a live stream.
 - `PairingSteps` has a small bottom margin so the step graph is not glued to the next panel. The
   pairing views trim their outer padding to keep the 320×568 no-scroll test passing.

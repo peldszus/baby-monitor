@@ -51,6 +51,12 @@ labelled wide, ultra, fisheye or telephoto; with generic Android labels it uses 
 string order. The **Camera** selector is sorted by label; use it on the child screen to override
 the choice.
 
+Either device can stop monitoring. `Stop monitoring` sends an `end` message over the control
+channel before closing the peer connection, so the other side stops its tracks, returns to the home
+screen, and shows a snackbar with the time the other device ended the stream. Leaving the role view
+or firing `pagehide` also tries to send `end`; an abrupt network loss still raises the parent alarm
+instead of looking like a clean stop.
+
 The parent device can turn video or audio off and on, change the frame rate,
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
 Microphone gain goes up to 10× (about +20 dB); the child runs a peak limiter after the gain stage

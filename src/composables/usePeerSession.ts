@@ -1,4 +1,5 @@
 import { onBeforeUnmount, ref, shallowRef } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   createEnd,
   createHello,
@@ -37,8 +38,10 @@ import {
   SignalChunkCollector,
   type SignalFailure,
 } from '@/core/signaling-qr'
+import { formatRemoteEndNotice } from '@/core/notice'
 import { deriveShortCode } from '@/core/short-code'
 import { transition, type SessionEvent, type SessionState } from '@/core/state'
+import { showNotice } from '@/composables/useAppNotice'
 
 function messageForFailure(reason: SignalFailure): string {
   switch (reason) {
@@ -94,6 +97,7 @@ function detectCapabilities(): string[] {
 }
 
 export function usePeerSession(role: PeerRole) {
+  const router = useRouter()
   const state = ref<SessionState>('idle')
   const error = ref<string | null>(null)
   const pairingProgress = ref<string | null>(null)
@@ -127,8 +131,8 @@ export function usePeerSession(role: PeerRole) {
   }
   if (role === 'parent') {
     window.addEventListener('pointerdown', unlockAlarm, { once: true })
-    window.addEventListener('pagehide', onPageHide)
   }
+  window.addEventListener('pagehide', onPageHide)
 
   let peer: PeerSession | null = null
   let media: ChildMediaController | null = null
@@ -359,12 +363,10 @@ export function usePeerSession(role: PeerRole) {
   }
 
   function sendEnd(): void {
-    if (role !== 'parent') return
     sendControl(createEnd())
   }
 
   async function endSession(): Promise<void> {
-    if (role !== 'parent') return
     const target = channel
     if (!target || target.readyState !== 'open') return
     if (!sendControl(createEnd())) return
@@ -558,7 +560,10 @@ export function usePeerSession(role: PeerRole) {
     const message = result.message
 
     if (message.type === 'end') {
-      if (role === 'child') reset()
+      const endedBy = role === 'child' ? 'parent' : 'child'
+      showNotice(formatRemoteEndNotice(endedBy, new Date()))
+      reset()
+      void router.replace('/')
       return
     }
     if (message.type === 'ping') {
@@ -871,10 +876,10 @@ export function usePeerSession(role: PeerRole) {
   }
 
   onBeforeUnmount(() => {
+    sendEnd()
+    window.removeEventListener('pagehide', onPageHide)
     if (role === 'parent') {
-      sendEnd()
       window.removeEventListener('pointerdown', unlockAlarm)
-      window.removeEventListener('pagehide', onPageHide)
     } else {
       navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }

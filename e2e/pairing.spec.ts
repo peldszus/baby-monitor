@@ -8,6 +8,30 @@ async function expectNoScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(1)
 }
 
+async function pairViaText(child: Page, parent: Page): Promise<void> {
+  await child.goto('/#/child')
+  await child.getByTestId('start-child').click()
+  await child.getByText('Show text code instead').click()
+  const offerBox = child.getByTestId('offer-text').getByRole('textbox')
+  await expect.poll(() => offerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
+  const offer = await offerBox.inputValue()
+
+  await parent.goto('/#/parent')
+  await parent.getByText('Enter text code instead').click()
+  await parent.getByTestId('paste-input').getByRole('textbox').fill(offer)
+  await parent.getByTestId('submit-offer').click()
+  await parent.getByText('Show text code instead').click()
+  const answerBox = parent.getByTestId('answer-text').getByRole('textbox')
+  await expect.poll(() => answerBox.inputValue(), { timeout: 45_000 }).not.toBe('')
+  const answer = await answerBox.inputValue()
+
+  await child.getByText('Enter answer manually').click()
+  await child.getByTestId('paste-input').getByRole('textbox').fill(answer)
+  await child.getByTestId('submit-answer').click()
+  await expect(child.getByTestId('connection-state')).toHaveText('Connected', { timeout: 45_000 })
+  await expect(parent.getByTestId('connection-state')).toHaveText('Connected', { timeout: 45_000 })
+}
+
 test.describe('pairing', () => {
   test('child and parent connect, exchange media and ping', async ({ browser }) => {
     test.setTimeout(150_000)
@@ -299,7 +323,10 @@ test.describe('pairing', () => {
       await parent.getByText('Stop monitoring').click()
       await expect(parent.getByTestId('role-child')).toBeVisible()
       await expect(parent).toHaveURL(/#\/$/)
-      await expect(child.getByTestId('step-1')).toHaveAttribute('aria-current', 'step')
+      await expect(child).toHaveURL(/#\/$/)
+      await expect(child.getByTestId('app-notice')).toContainText(
+        /The parent device ended the stream at /
+      )
       await expect(child.getByTestId('error')).toHaveCount(0)
     } finally {
       await childContext.close()
@@ -344,10 +371,60 @@ test.describe('pairing', () => {
       })
 
       await parent.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-      await expect(child.getByTestId('step-1')).toHaveAttribute('aria-current', 'step', {
-        timeout: 10_000,
-      })
+      await expect(child).toHaveURL(/#\/$/, { timeout: 10_000 })
+      await expect(child.getByTestId('app-notice')).toContainText(
+        /The parent device ended the stream at /
+      )
       await expect(child.getByTestId('error')).toHaveCount(0)
+    } finally {
+      await childContext.close()
+      await parentContext.close()
+    }
+  })
+
+  test('child stop returns both devices home with a notice', async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    const childContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+    const parentContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+
+    try {
+      const child = await childContext.newPage()
+      const parent = await parentContext.newPage()
+      await pairViaText(child, parent)
+
+      await child.getByText('Stop monitoring').click()
+      await expect(child).toHaveURL(/#\/$/)
+      await expect(parent).toHaveURL(/#\/$/)
+      await expect(parent.getByTestId('app-notice')).toContainText(
+        /The child device ended the stream at /
+      )
+      await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
+      await expect(parent.getByTestId('error')).toHaveCount(0)
+    } finally {
+      await childContext.close()
+      await parentContext.close()
+    }
+  })
+
+  test('child pagehide ends the parent session without an error', async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    const childContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+    const parentContext = await browser.newContext({ permissions: ['camera', 'microphone'] })
+
+    try {
+      const child = await childContext.newPage()
+      const parent = await parentContext.newPage()
+      await pairViaText(child, parent)
+
+      await child.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+      await expect(parent).toHaveURL(/#\/$/, { timeout: 10_000 })
+      await expect(parent.getByTestId('app-notice')).toContainText(
+        /The child device ended the stream at /
+      )
+      await expect(parent.getByTestId('alarm-overlay')).toHaveCount(0)
+      await expect(parent.getByTestId('error')).toHaveCount(0)
     } finally {
       await childContext.close()
       await parentContext.close()
