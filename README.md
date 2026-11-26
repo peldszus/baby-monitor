@@ -12,8 +12,9 @@ actually took effect. Both devices exchange an automatic RTT ping every two seco
 
 M3 adds a screen Wake Lock, a black fullscreen child display that the parent can switch on, a loud
 parent alarm after six seconds without a heartbeat, and automatic ICE restart attempts while the
-data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning and
-Picture-in-Picture, including a canvas pipeline that keeps the transformed view in the PiP window.
+data channel still works. M4 adds 90° rotation, 1–4× digital zoom, drag/pinch panning,
+Picture-in-Picture and a fullscreen video toggle, including a canvas pipeline that keeps the
+transformed view in the PiP window.
 M5 adds an install prompt, offline app-shell caching, CSP and referrer meta tags, recommended
 security headers for header-capable hosts, and dependency-audit/PWA checks in CI.
 
@@ -36,11 +37,21 @@ vertical scrolling on phone viewports.
 The QR code carries only the ICE credentials, DTLS fingerprint and host candidates; the rest of the
 data-channel SDP comes from a shared template. It is one small code per direction and expires after
 two minutes. A compressed full-SDP fallback still supports chunking if a browser combination needs
-it. The scanner reads continuously while the dialog is open; there is no shutter button. Both
-devices derive the same six-digit short code from the DTLS fingerprints so you can compare them out
-of band.
+it. The scanner reads continuously while the dialog is open; there is no shutter button. It asks for
+a 16:9 rear camera and prefers the normal rear lens over a label containing `wide`, `ultra` or
+`fisheye`. If the browser exposes several cameras, a **Camera** selector in the scanner lets you
+switch. Both devices derive the same six-digit short code from the DTLS fingerprints so you can
+compare them out of band.
 
-Once connected, the parent device can turn video or audio off and on, change the frame rate,
+Once connected, the child can switch between the cameras the browser exposes, for example from an
+ultra-wide rear lens to the main camera, without re-pairing. The child first asks for an exact
+1280×720 16:9 rear capture, then falls back to ideal constraints if the camera cannot provide it.
+It also allows the browser to crop and scale to 16:9. It prefers a normal rear lens over one
+labelled wide, ultra, fisheye or telephoto; with generic Android labels it uses the last label in
+string order. The **Camera** selector is sorted by label; use it on the child screen to override
+the choice.
+
+The parent device can turn video or audio off and on, change the frame rate,
 resolution and bitrate, adjust microphone gain, and enable noise suppression or automatic gain.
 Microphone gain goes up to 10× (about +20 dB); the child runs a peak limiter after the gain stage
 so quiet sounds get louder without hard clipping. The child stops the camera or microphone track
@@ -54,6 +65,15 @@ The parent video has rotate-left and rotate-right buttons, a 1–4× zoom slider
 panning, and a reset button. Rotation and zoom use a canvas renderer so the displayed region and
 the PiP stream stay identical. Digital zoom only enlarges existing pixels; for a strong zoom,
 raise the child resolution in the camera controls first.
+
+The fullscreen button makes the video fill the screen and leaves a small exit button in the
+corner. It uses element fullscreen where the browser supports it, native video fullscreen on iOS,
+and a fixed in-app overlay as a final fallback. When the view is rotated or zoomed, the raw video
+is hidden behind the canvas, so a rotated fullscreen view cannot show both orientations at once.
+Drag and pinch zoom keep working while fullscreen; set rotation and the zoom slider before
+entering. Where native fullscreen is available, Esc or the back gesture also leaves it. If the
+child browser rotates and the camera changes frame size, the parent canvas follows the new
+dimensions and keeps its aspect ratio instead of stretching the image.
 
 The Picture-in-Picture button uses the browser's native video PiP when the view is unmodified. When
 the view is rotated, zoomed or panned, the canvas is captured with `captureStream()`, the remote

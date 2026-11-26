@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import CameraSelect from '@/components/CameraSelect.vue'
+import { listVideoInputs, preferNormalCamera, type CameraDevice } from '@/core/camera'
 import { createQrScanner } from '@/core/scanner'
 
 const props = defineProps<{
@@ -19,6 +21,8 @@ const video = ref<HTMLVideoElement | null>(null)
 const error = ref<string | null>(null)
 const scanning = ref(false)
 const captured = ref(false)
+const devices = ref<CameraDevice[]>([])
+const selectedDeviceId = ref('')
 const scanner = createQrScanner()
 let starting = false
 let capturedTimer: ReturnType<typeof setTimeout> | undefined
@@ -32,20 +36,60 @@ function onDecoded(text: string): void {
   emit('decoded', text)
 }
 
-async function start(): Promise<void> {
+function currentDeviceId(): string {
+  const stream = video.value?.srcObject as MediaStream | null
+  return stream?.getVideoTracks()[0]?.getSettings().deviceId ?? ''
+}
+
+async function startScanner(deviceId?: string, restart = false): Promise<void> {
   const element = video.value
-  if (!element || starting) return
+  if (!element || starting || !props.modelValue) return
   starting = true
+  if (restart) {
+    scanner.stop()
+    scanning.value = false
+  }
   error.value = null
   captured.value = false
   try {
-    await scanner.start(element, onDecoded, props.stream)
+    await scanner.start(element, onDecoded, props.stream, deviceId)
+    if (!props.modelValue) {
+      scanner.stop()
+      return
+    }
     scanning.value = true
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not start the camera.'
   } finally {
     starting = false
   }
+}
+
+async function openScanner(): Promise<void> {
+  const hadSelection = Boolean(selectedDeviceId.value)
+  await startScanner(selectedDeviceId.value || undefined)
+  if (error.value || !props.modelValue || props.stream) return
+  try {
+    const list = await listVideoInputs()
+    if (!props.modelValue) return
+    devices.value = list
+    const current = currentDeviceId()
+    if (current) selectedDeviceId.value = current
+    if (hadSelection) return
+    const preferred = preferNormalCamera(list, current)
+    if (preferred && preferred !== selectedDeviceId.value) {
+      selectedDeviceId.value = preferred
+      await startScanner(preferred, true)
+    }
+  } catch {
+    devices.value = []
+  }
+}
+
+async function selectCamera(deviceId: string): Promise<void> {
+  if (!deviceId || deviceId === selectedDeviceId.value) return
+  selectedDeviceId.value = deviceId
+  await startScanner(deviceId, true)
 }
 
 function stop(): void {
@@ -60,7 +104,7 @@ watch(
   async (open) => {
     if (open) {
       await nextTick()
-      await start()
+      await openScanner()
     } else {
       stop()
     }
@@ -68,7 +112,7 @@ watch(
 )
 
 watch(video, (element) => {
-  if (element && props.modelValue) void start()
+  if (element && props.modelValue) void openScanner()
 })
 
 onBeforeUnmount(stop)
@@ -85,6 +129,17 @@ onBeforeUnmount(stop)
       <v-card-title>Scan QR code</v-card-title>
       <v-card-text class="scanner-body">
         <v-alert v-if="error" type="error" variant="tonal">{{ error }}</v-alert>
+        <CameraSelect
+          v-if="!stream && devices.length > 1"
+          :devices="devices"
+          :model-value="selectedDeviceId"
+          label="Camera"
+          test-id="scanner-camera-select"
+          @update:model-value="selectCamera"
+        />
+        <p v-if="!stream && devices.length > 1" class="scanner-hint">
+          Choose the normal rear camera if the preview is too wide.
+        </p>
         <video ref="video" class="scanner-video" muted playsinline />
         <v-progress-linear v-if="!error" indeterminate color="primary" rounded />
         <p class="scanner-hint" data-testid="scanner-status">

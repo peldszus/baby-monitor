@@ -170,7 +170,44 @@ test.describe('pairing', () => {
       await expect(stage).toHaveAttribute('data-rotation', '0')
       await parent.getByTestId('rotate-right').click()
       await expect(stage).toHaveAttribute('data-rotation', '90')
-      await expect(parent.getByTestId('presentation-canvas')).toBeVisible()
+      const canvas = parent.getByTestId('presentation-canvas')
+      await expect(canvas).toBeVisible()
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([180, 320])
+      const canvasBox = await canvas.boundingBox()
+      if (!canvasBox) throw new Error('Presentation canvas has no bounding box.')
+      expect(canvasBox.width / canvasBox.height).toBeCloseTo(180 / 320, 2)
+
+      await remoteVideo.evaluate((element) => {
+        Object.defineProperty(element, 'videoWidth', { configurable: true, get: () => 180 })
+        Object.defineProperty(element, 'videoHeight', { configurable: true, get: () => 320 })
+      })
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([320, 180])
+      await remoteVideo.evaluate((element) => {
+        Reflect.deleteProperty(element, 'videoWidth')
+        Reflect.deleteProperty(element, 'videoHeight')
+      })
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => [
+            (element as HTMLCanvasElement).width,
+            (element as HTMLCanvasElement).height,
+          ])
+        )
+        .toEqual([180, 320])
 
       const zoom = parent.getByTestId('zoom-slider').getByRole('slider')
       await zoom.focus()
@@ -222,6 +259,26 @@ test.describe('pairing', () => {
       await expect(stage).toHaveAttribute('data-zoom', '1.00')
       await expect(stage).toHaveAttribute('data-pan-x', '0.000')
       await expect(parent.getByTestId('presentation-canvas')).toBeHidden()
+
+      await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await parent.getByTestId('fullscreen-button').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'true')
+      await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'true')
+      await expect(parent.getByTestId('fullscreen-exit')).toBeVisible()
+      await parent.getByTestId('fullscreen-exit').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'false')
+
+      await parent.getByTestId('rotate-right').click()
+      await expect(stage).toHaveAttribute('data-rotation', '90')
+      await parent.getByTestId('fullscreen-button').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'true')
+      await expect(parent.getByTestId('presentation-canvas')).toBeVisible()
+      await expect(remoteVideo).toHaveCSS('visibility', 'hidden')
+      await parent.getByTestId('fullscreen-exit').click()
+      await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await parent.getByTestId('reset-presentation').click()
+      await expect(stage).toHaveAttribute('data-rotation', '0')
 
       await parent.getByTestId('pip-button').click()
       await expect(stage).toHaveAttribute('data-pip', 'standard', { timeout: 15_000 })

@@ -54,6 +54,7 @@ src/
     short-code.ts            # Six-digit code derived from both DTLS fingerprints
     negotiation.ts           # Perfect negotiation for media over the data channel
     peer.ts                  # RTCPeerConnection wrapper, data handshake, media negotiation
+    camera.ts                # Video input listing and normal-rear-camera preference
     media-child.ts           # Capture tracks, gain graph, constraints and replaceTrack helpers
     media-settings.ts        # Shared defaults, ranges and UI presets for M2 controls
     media-stats.ts           # getStats() summary for actual fps, size, bitrate and audio level
@@ -64,6 +65,7 @@ src/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
     VideoStream.vue          # Attaches a MediaStream to a <video>
+    CameraSelect.vue         # Shared camera picker for the child and QR scanner
     PresentationVideo.vue    # Parent canvas presentation, gestures and PiP
     ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
     AlarmOverlay.vue         # Fullscreen parent warning when the connection fails
@@ -117,7 +119,15 @@ that directory.
   shows those values rather than only the requested ones.
 - Parent playback volume uses the video element's `volume`. iOS may ignore it and use hardware
   volume instead; the UI still reflects the chosen value.
-- Child media requests the rear camera (`facingMode: environment`) at 1280×720 and 15 fps ideal.
+- Child media requests the rear camera (`facingMode: environment`) at 1280×720, 16:9 and 15 fps
+  ideal. `camera.ts` lists video inputs sorted by label and `preferNormalCamera` prefers a normal
+  rear lens over labels containing `wide`, `ultra`, `fisheye`, `tele` or `macro`. With generic
+  Android labels it uses the first label in string order. The child first requests exact
+  1280×720 16:9, falls back to ideal constraints on `OverconstrainedError`, asks for
+  `crop-and-scale`, auto-switches once on start, then exposes a `CameraSelect`;
+  `ChildMediaController.setVideoDevice` opens the new track before stopping the old one, and
+  `usePeerSession` replaces the sender track without re-pairing. The QR scanner applies the same
+  preference on first open, keeps a manual selection, and also exposes a camera picker.
 - Pairing uses one shared three-step indicator on both devices: child code, parent code and
   connect. The child shows the offer then scans the answer; the parent scans the offer then shows
   the answer. The QR exchange is one-way, so the child cannot know when the parent scanned its
@@ -141,9 +151,14 @@ that directory.
   the restart fails, the session moves to `lost`, the parent alarm stays visible, and the UI asks
   for a new pairing.
 - M4 presentation: the parent keeps rotation, zoom and normalized pan in `presentation.ts`.
+  When transformed, the raw `<video>` is hidden behind the canvas. This also prevents a rotated
+  fullscreen view from showing the unrotated video around the canvas after an orientation change.
   Rotation is limited to 90° steps, zoom to 1–4×, and pan to ±1 of the maximum range. The native
   video is shown when the view is unmodified. Once transformed, `PresentationVideo` redraws the
-  video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface.
+  video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface. The
+  draw loop re-reads `videoWidth`/`videoHeight`, so a child orientation change resizes the canvas
+  instead of stretching the frame. The canvas uses auto width/height with max constraints, so a
+  portrait stream keeps its aspect ratio in the normal and fullscreen layouts.
 - Native PiP is requested on the main video at identity. For a transformed view,
   `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
   on a hidden video. Switching between identity and transformed views closes PiP; the user starts
@@ -154,6 +169,11 @@ that directory.
   fallback. The source video also stays full-size behind the canvas so the browser does not treat
   it as a tiny hidden element. This prevents the Android PiP window from freezing when the app
   goes to the home screen.
+- Fullscreen requests the presentation stage with `requestFullscreen`, falls back to
+  `webkitEnterFullscreen` on the video for iOS, and finally keeps a fixed in-app overlay. The
+  `fullscreenchange` and WebKit fullscreen events keep `fullscreen`/`fullscreenMode` in sync, the
+  exit button lives inside the stage, and body scrolling is locked while active. Entering
+  fullscreen exits PiP first.
 - Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
   resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.
@@ -189,9 +209,10 @@ full offer/answer flow, asserts both codes are a single compact chunk, then chec
 negotiated over the data channel, the parent receives video, both short codes match, and both
 devices show an automatic RTT. It also toggles video and audio, changes frame rate, resolution and
 bitrate, enables noise suppression and automatic gain, sets gain and volume, rotates, zooms,
-pans, resets the presentation, opens native and canvas PiP, toggles the child's dark screen, and
-verifies the child's tracks and reported status. A separate case closes the child context and
-checks that the parent alarm appears, can be silenced and can be stopped. Another dispatches
+pans, resets the presentation, enters and leaves fullscreen, opens native and canvas PiP, toggles
+the child's dark screen, and verifies the child's tracks and reported status. A separate case
+closes the child context and checks that the parent alarm appears, can be silenced and can be
+stopped. Another dispatches
 `pagehide` on the parent and checks that the child returns to pairing without an error. Three
 additional cases check that the pairing screens do not scroll at phone viewport sizes.
 `e2e/scanner.spec.ts` feeds a generated QR video through a fake camera and verifies the automatic

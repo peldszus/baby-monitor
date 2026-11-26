@@ -28,6 +28,8 @@ Assessment: **Android/Chrome is well feasible. iOS/Safari is feasible in princip
 - **FR-10** Parent device: floating overlay video with audio (Picture-in-Picture) while using other apps, with a way back to the app.
 - **FR-11** Long-running operation over several hours on both devices.
 - **FR-12** Connection monitoring with a clear warning on the parent device when it fails.
+- **FR-13** Parent device: switch the video to fullscreen and back, with a visible exit control.
+- **FR-14** Child device: choose among the cameras the browser exposes, without re-pairing.
 
 ### 2.2 Security
 
@@ -122,7 +124,7 @@ Once the data channel is open, the child device adds its audio and video tracks 
 
 ## 5. Media
 
-- **Capture:** `getUserMedia({audio, video})` on the child device. Rear or front camera selectable. Default: rear/main camera at 1280×720 and 15 fps; lower values remain available for bandwidth and power control.
+- **Capture:** `getUserMedia({audio, video})` on the child device. Default: rear/main camera at 1280×720, 16:9 and 15 fps ideal, with `crop-and-scale` allowed so a square-only browser capture can be fitted to 16:9; lower values remain available for bandwidth and power control. The child starts on a normal rear lens where labels allow and can switch among the cameras the browser exposes. The camera list is label-sorted; generic Android labels fall back to the first label in string order. The QR scanner also prefers a normal rear lens over an ultra-wide one.
 - **Codecs:** browser defaults (VP8/H.264, Opus). Intervene with `RTCRtpTransceiver.setCodecPreferences` only where needed (for example test H.264 for hardware encoding on some devices).
 - **Video hint:** set `videoTrack.contentHint = 'motion'` or `'detail'` and test.
 - **Audio processing:** `echoCancellation: false` (no echo scenario); `noiseSuppression` and `autoGainControl` adjustable, default rather **off**, because they can suppress quiet sounds.
@@ -207,6 +209,7 @@ A **night test** (6–8 hours, both devices, default settings, real Wi-Fi) on al
   - `core/signaling-qr.ts`: compact payload codec (SDP template, binary encode/decode), full-SDP fallback, chunking, validity period.
   - `core/control.ts`: data channel protocol (types, validation, heartbeat).
   - `core/negotiation.ts`: media offer/answer over the data channel (perfect negotiation, parent is the polite peer).
+  - `core/camera.ts`: video input listing and normal-rear-camera preference.
   - `core/media-child.ts`: `getUserMedia`, gain graph, constraints, `replaceTrack`.
   - `core/media-parent.ts`: playback, gain, level measurement, canvas pipeline for PiP.
   - `core/power.ts`: Wake Lock, battery, visibility, black fullscreen surface.
@@ -277,7 +280,7 @@ Start in M0/M1 with Vitest (protocol, QR) plus one Playwright two-context test f
 2. **M1 Pairing:** compact QR payload (data-channel-only SDP template) with full-SDP fallback, scanner, validity period, optional short code. First Playwright two-context pairing test.
 3. **M2 Control:** media negotiation over the data channel, audio/video on/off, frame rate, resolution, bitrate, mic gain, volume, status display. Integration tests for all commands and for renegotiation.
 4. **M3 Operation:** Wake Lock, black fullscreen surface, heartbeat and alarm, reconnection. E2E test for alarm on connection loss.
-5. **M4 Presentation:** rotation, pan/zoom, PiP (standard first, then the canvas variant).
+5. **M4 Presentation:** rotation, pan/zoom, PiP (standard first, then the canvas variant) and fullscreen video.
 6. **M5 PWA/hardening:** installability, offline shell, CSP and headers, dependency audit. CI with unit, integration and E2E tests.
 7. **M6 Acceptance:** night test (6–8 h), device matrix, test on hotel Wi-Fi and with client isolation.
 

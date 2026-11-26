@@ -5,6 +5,10 @@ import {
   type VideoSettings,
 } from './media-settings'
 
+interface ResizableTrackConstraints extends MediaTrackConstraints {
+  resizeMode?: ConstrainDOMString
+}
+
 export interface ChildMediaOptions {
   videoDeviceId?: string
   audioDeviceId?: string
@@ -13,13 +17,24 @@ export interface ChildMediaOptions {
 }
 
 export function videoConstraints(options: ChildMediaOptions = {}): MediaTrackConstraints {
-  return {
+  const constraints: ResizableTrackConstraints = {
     facingMode: { ideal: 'environment' },
     width: { ideal: 1280 },
     height: { ideal: 720 },
+    aspectRatio: { ideal: 16 / 9 },
+    resizeMode: { ideal: 'crop-and-scale' },
     frameRate: { ideal: 15, max: 30 },
     deviceId: options.videoDeviceId ? { exact: options.videoDeviceId } : undefined,
   }
+  return constraints
+}
+
+export function strictVideoConstraints(options: ChildMediaOptions = {}): MediaTrackConstraints {
+  const constraints = videoConstraints(options) as ResizableTrackConstraints
+  constraints.width = { exact: 1280 }
+  constraints.height = { exact: 720 }
+  constraints.aspectRatio = { exact: 16 / 9 }
+  return constraints
 }
 
 export function audioConstraints(options: ChildMediaOptions = {}): MediaTrackConstraints {
@@ -44,10 +59,20 @@ export async function openChildMedia(options: ChildMediaOptions = {}): Promise<M
   const wantAudio = options.audio !== false
   if (!wantVideo && !wantAudio) throw new Error('No media was requested.')
 
-  return navigator.mediaDevices.getUserMedia({
-    audio: wantAudio ? audioConstraints(options) : false,
-    video: wantVideo ? videoConstraints(options) : false,
-  })
+  const audio = wantAudio ? audioConstraints(options) : false
+  const video = wantVideo ? videoConstraints(options) : false
+  if (!wantVideo) return navigator.mediaDevices.getUserMedia({ audio, video: false })
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio,
+      video: strictVideoConstraints(options),
+    })
+  } catch (cause) {
+    const name = (cause as { name?: string } | null)?.name
+    if (name !== 'OverconstrainedError' && name !== 'ConstraintNotSatisfiedError') throw cause
+    return navigator.mediaDevices.getUserMedia({ audio, video })
+  }
 }
 
 /**
@@ -112,6 +137,78 @@ export class ChildMediaController {
     await this.rebuildAudioGraph()
     this.syncStream()
     return this.currentStream
+  }
+
+  async setVideoDevice(deviceId: string | null): Promise<MediaStreamTrack | null> {
+    if (this.stopped) return null
+    const nextId = deviceId || undefined
+    if (nextId === this.options.videoDeviceId) return this.rawVideo
+    if (!this.videoSettings.enabled) {
+      this.options.videoDeviceId = nextId
+      return null
+    }
+
+    const previousId = this.options.videoDeviceId
+    this.options.videoDeviceId = nextId
+    try {
+      let track: MediaStreamTrack
+      try {
+        track = await this.captureVideoTrack()
+      } catch (firstCause) {
+        // Many phones cannot keep two cameras open at once. Release the old
+        // track and retry before giving up on the switch.
+        this.rawVideo?.stop()
+        this.rawVideo = null
+        this.syncStream()
+        try {
+          track = await this.captureVideoTrack()
+        } catch {
+          await this.restoreVideoTrack(previousId)
+          throw firstCause
+        }
+      }
+      if (this.stopped) {
+        track.stop()
+        return null
+      }
+      this.rawVideo?.stop()
+      this.rawVideo = track
+      await this.applyVideoConstraints()
+      this.syncStream()
+      return track
+    } catch (cause) {
+      this.options.videoDeviceId = previousId
+      if (!this.rawVideo && this.videoSettings.enabled && !this.stopped) {
+        await this.restoreVideoTrack(previousId)
+      }
+      throw cause
+    }
+  }
+
+  private async captureVideoTrack(): Promise<MediaStreamTrack> {
+    const stream = await openChildMedia({ ...this.options, video: true, audio: false })
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stopStream(stream)
+      throw new Error('The camera did not provide a video track.')
+    }
+    return track
+  }
+
+  private async restoreVideoTrack(deviceId: string | undefined): Promise<void> {
+    this.options.videoDeviceId = deviceId
+    try {
+      const track = await this.captureVideoTrack()
+      if (this.stopped) {
+        track.stop()
+        return
+      }
+      this.rawVideo = track
+      await this.applyVideoConstraints()
+    } catch {
+      this.rawVideo = null
+    }
+    this.syncStream()
   }
 
   async setVideoEnabled(enabled: boolean): Promise<MediaStreamTrack | null> {
@@ -202,9 +299,20 @@ export class ChildMediaController {
   private async applyVideoConstraints(): Promise<void> {
     if (!this.rawVideo) return
     try {
-      await this.rawVideo.applyConstraints({
+      const constraints: ResizableTrackConstraints = {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        aspectRatio: { ideal: 16 / 9 },
+        resizeMode: { ideal: 'crop-and-scale' },
         frameRate: { ideal: this.videoSettings.fps, max: this.videoSettings.fps },
-      })
+      }
+      try {
+        await this.rawVideo.applyConstraints(constraints)
+      } catch {
+        await this.rawVideo.applyConstraints({
+          frameRate: { ideal: this.videoSettings.fps, max: this.videoSettings.fps },
+        })
+      }
     } catch {
       // Some cameras reject frame-rate changes; getStats() reports what was applied.
     }
