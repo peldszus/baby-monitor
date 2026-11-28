@@ -111,6 +111,20 @@ test.describe('pairing', () => {
         })
         .toBeGreaterThan(0)
 
+      const localVideo = child.getByTestId('local-video')
+      await expect
+        .poll(() => localVideo.evaluate((element) => (element as HTMLVideoElement).videoWidth), {
+          timeout: 45_000,
+        })
+        .toBeGreaterThan(0)
+      const localStage = localVideo.locator('xpath=..')
+      await expect(localStage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+      const localStageBox = await localStage.boundingBox()
+      const localVideoBox = await localVideo.boundingBox()
+      if (!localStageBox || !localVideoBox) throw new Error('Child preview stage is missing.')
+      expect(localStageBox.width).toBeCloseTo(localVideoBox.width, 0)
+      expect(localStageBox.height).toBeCloseTo(localVideoBox.height, 0)
+
       await expect(child.getByTestId('short-code')).toHaveText(/^\d{6}$/)
       await expect(parent.getByTestId('short-code')).toHaveText(/^\d{6}$/)
       expect(await parent.getByTestId('short-code').textContent()).toBe(
@@ -285,12 +299,20 @@ test.describe('pairing', () => {
       await expect(parent.getByTestId('presentation-canvas')).toBeHidden()
 
       await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await expect(stage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+      const normalStageBox = await stage.boundingBox()
+      const normalVideoBox = await remoteVideo.boundingBox()
+      if (!normalStageBox || !normalVideoBox) throw new Error('Video stage is missing.')
+      expect(normalStageBox.width).toBeCloseTo(normalVideoBox.width, 0)
+      expect(normalStageBox.height).toBeCloseTo(normalVideoBox.height, 0)
       await parent.getByTestId('fullscreen-button').click()
       await expect(stage).toHaveAttribute('data-fullscreen', 'true')
+      await expect(stage).toHaveCSS('background-color', 'rgb(0, 0, 0)')
       await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'true')
       await expect(parent.getByTestId('fullscreen-exit')).toBeVisible()
       await parent.getByTestId('fullscreen-exit').click()
       await expect(stage).toHaveAttribute('data-fullscreen', 'false')
+      await expect(stage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
       await expect(parent.getByTestId('fullscreen-button')).toHaveAttribute('aria-pressed', 'false')
 
       await parent.getByTestId('rotate-right').click()

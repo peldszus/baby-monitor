@@ -66,7 +66,7 @@ src/
   components/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
-    VideoStream.vue          # Attaches a MediaStream to a <video>
+    VideoStream.vue          # Fit-to-stream child preview around a <video>
     CameraSelect.vue         # Shared camera picker for the child and QR scanner
     PresentationVideo.vue    # Parent canvas presentation, gestures and PiP
     ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
@@ -160,7 +160,9 @@ that directory.
   video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface. The
   draw loop re-reads `videoWidth`/`videoHeight`, so a child orientation change resizes the canvas
   instead of stretching the frame. The canvas uses auto width/height with max constraints, so a
-  portrait stream keeps its aspect ratio in the normal and fullscreen layouts.
+  portrait stream keeps its aspect ratio in the normal and fullscreen layouts. In the normal view
+  the stage is `width: fit-content` with a transparent background, so it hugs the video or canvas
+  instead of showing black letterbox bars. Fullscreen keeps the black surface.
 - Native PiP is requested on the main video at identity. For a transformed view,
   `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
   on a hidden video. Switching between identity and transformed views closes PiP; the user starts
@@ -176,6 +178,9 @@ that directory.
   `fullscreenchange` and WebKit fullscreen events keep `fullscreen`/`fullscreenMode` in sync, the
   exit button lives inside the stage, and body scrolling is locked while active. Entering
   fullscreen exits PiP first.
+- `VideoStream` uses the same fit-to-stream treatment for the child's local preview: the wrapper
+  is `width: fit-content` and transparent, and the video keeps its natural aspect ratio, so the
+  child view has no black letterbox bars.
 - Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
   resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.

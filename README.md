@@ -49,7 +49,8 @@ ultra-wide rear lens to the main camera, without re-pairing. The child first ask
 It also allows the browser to crop and scale to 16:9. It prefers a normal rear lens over one
 labelled wide, ultra, fisheye or telephoto; with generic Android labels it uses the last label in
 string order. The **Camera** selector is sorted by label; use it on the child screen to override
-the choice.
+the choice. The child's local preview hugs the stream's aspect ratio and has no black letterbox
+background.
 
 Either device can stop monitoring. `Stop monitoring` sends an `end` message over the control
 channel before closing the peer connection, so the other side stops its tracks, returns to the home
@@ -70,7 +71,9 @@ every two seconds and shows the latest round-trip time next to the connection st
 The parent video has rotate-left and rotate-right buttons, a 1–4× zoom slider, drag or pinch
 panning, and a reset button. Rotation and zoom use a canvas renderer so the displayed region and
 the PiP stream stay identical. Digital zoom only enlarges existing pixels; for a strong zoom,
-raise the child resolution in the camera controls first.
+raise the child resolution in the camera controls first. In the normal view the stage hugs the
+stream's aspect ratio and has no black letterbox background; fullscreen still uses a black
+surface where the screen and stream shapes differ.
 
 The fullscreen button makes the video fill the screen and leaves a small exit button in the
 corner. It uses element fullscreen where the browser supports it, native video fullscreen on iOS,
