@@ -632,7 +632,7 @@ onBeforeUnmount(() => {
     <div
       ref="stage"
       class="stage"
-      :class="{ fullscreen }"
+      :class="{ fullscreen, empty: !stream || videoSize.width === 0 }"
       :data-rotation="presentation.rotation"
       :data-zoom="presentation.zoom.toFixed(2)"
       :data-pan-x="presentation.panX.toFixed(3)"
@@ -763,12 +763,20 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 180px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
   max-height: 60vh;
+  margin: 0 auto;
   overflow: hidden;
   border-radius: 16px;
-  background: #000;
+  background: transparent;
   touch-action: none;
+}
+
+.stage.empty {
+  width: 100%;
+  min-height: 180px;
 }
 
 .stage.fullscreen,
@@ -780,14 +788,21 @@ onBeforeUnmount(() => {
   height: 100vh;
   max-height: none;
   border-radius: 0;
+  background: #000;
 }
 
 .video,
 .canvas {
   display: block;
-  width: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
   max-height: 60vh;
   object-fit: contain;
+}
+
+.video {
+  background: transparent;
 }
 
 .stage.fullscreen .video,

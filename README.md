@@ -70,7 +70,9 @@ every two seconds and shows the latest round-trip time next to the connection st
 The parent video has rotate-left and rotate-right buttons, a 1–4× zoom slider, drag or pinch
 panning, and a reset button. Rotation and zoom use a canvas renderer so the displayed region and
 the PiP stream stay identical. Digital zoom only enlarges existing pixels; for a strong zoom,
-raise the child resolution in the camera controls first.
+raise the child resolution in the camera controls first. In the normal view the stage hugs the
+stream's aspect ratio and has no black letterbox background; fullscreen still uses a black
+surface where the screen and stream shapes differ.
 
 The fullscreen button makes the video fill the screen and leaves a small exit button in the
 corner. It uses element fullscreen where the browser supports it, native video fullscreen on iOS,

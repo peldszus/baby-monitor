@@ -160,7 +160,9 @@ that directory.
   video into a canvas with rotation, zoom and pan; the canvas is the visible parent surface. The
   draw loop re-reads `videoWidth`/`videoHeight`, so a child orientation change resizes the canvas
   instead of stretching the frame. The canvas uses auto width/height with max constraints, so a
-  portrait stream keeps its aspect ratio in the normal and fullscreen layouts.
+  portrait stream keeps its aspect ratio in the normal and fullscreen layouts. In the normal view
+  the stage is `width: fit-content` with a transparent background, so it hugs the video or canvas
+  instead of showing black letterbox bars. Fullscreen keeps the black surface.
 - Native PiP is requested on the main video at identity. For a transformed view,
   `PresentationVideo` captures the canvas at 30 fps, adds the remote audio track, and requests PiP
   on a hidden video. Switching between identity and transformed views closes PiP; the user starts
