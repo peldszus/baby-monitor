@@ -66,7 +66,7 @@ src/
   components/
     SignalQr.vue             # QR carousel with expiry countdown
     QrScanner.vue            # Camera dialog
-    VideoStream.vue          # Attaches a MediaStream to a <video>
+    VideoStream.vue          # Fit-to-stream child preview around a <video>
     CameraSelect.vue         # Shared camera picker for the child and QR scanner
     PresentationVideo.vue    # Parent canvas presentation, gestures and PiP
     ConnectionStatus.vue     # State, peer state, RTT, reconnect and wake-lock status
@@ -178,6 +178,9 @@ that directory.
   `fullscreenchange` and WebKit fullscreen events keep `fullscreen`/`fullscreenMode` in sync, the
   exit button lives inside the stage, and body scrolling is locked while active. Entering
   fullscreen exits PiP first.
+- `VideoStream` uses the same fit-to-stream treatment for the child's local preview: the wrapper
+  is `width: fit-content` and transparent, and the video keeps its natural aspect ratio, so the
+  child view has no black letterbox bars.
 - Digital zoom only enlarges existing pixels. Strong zoom should be paired with a higher child
   resolution via `set-video`; real camera zoom is optional and not implemented.
   The monitoring feed doubles as the answer scanner, so it must be sharp enough to read a QR code.

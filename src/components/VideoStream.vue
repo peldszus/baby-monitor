@@ -31,24 +31,36 @@ onMounted(attach)
 </script>
 
 <template>
-  <video
-    ref="video"
-    class="video-stream"
-    autoplay
-    playsinline
-    :muted="muted"
-    :data-testid="testId"
-    @loadedmetadata="attach"
-  />
+  <div class="video-stage">
+    <video
+      ref="video"
+      class="video-stream"
+      autoplay
+      playsinline
+      :muted="muted"
+      :data-testid="testId"
+      @loadedmetadata="attach"
+    />
+  </div>
 </template>
 
 <style scoped>
+.video-stage {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: transparent;
+}
+
 .video-stream {
   display: block;
-  width: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
   max-height: 60vh;
-  border-radius: 16px;
-  background: #000;
+  background: transparent;
   object-fit: contain;
 }
 </style>

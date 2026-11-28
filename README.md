@@ -49,7 +49,8 @@ ultra-wide rear lens to the main camera, without re-pairing. The child first ask
 It also allows the browser to crop and scale to 16:9. It prefers a normal rear lens over one
 labelled wide, ultra, fisheye or telephoto; with generic Android labels it uses the last label in
 string order. The **Camera** selector is sorted by label; use it on the child screen to override
-the choice.
+the choice. The child's local preview hugs the stream's aspect ratio and has no black letterbox
+background.
 
 Either device can stop monitoring. `Stop monitoring` sends an `end` message over the control
 channel before closing the peer connection, so the other side stops its tracks, returns to the home

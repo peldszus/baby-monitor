@@ -111,6 +111,20 @@ test.describe('pairing', () => {
         })
         .toBeGreaterThan(0)
 
+      const localVideo = child.getByTestId('local-video')
+      await expect
+        .poll(() => localVideo.evaluate((element) => (element as HTMLVideoElement).videoWidth), {
+          timeout: 45_000,
+        })
+        .toBeGreaterThan(0)
+      const localStage = localVideo.locator('xpath=..')
+      await expect(localStage).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+      const localStageBox = await localStage.boundingBox()
+      const localVideoBox = await localVideo.boundingBox()
+      if (!localStageBox || !localVideoBox) throw new Error('Child preview stage is missing.')
+      expect(localStageBox.width).toBeCloseTo(localVideoBox.width, 0)
+      expect(localStageBox.height).toBeCloseTo(localVideoBox.height, 0)
+
       await expect(child.getByTestId('short-code')).toHaveText(/^\d{6}$/)
       await expect(parent.getByTestId('short-code')).toHaveText(/^\d{6}$/)
       expect(await parent.getByTestId('short-code').textContent()).toBe(
